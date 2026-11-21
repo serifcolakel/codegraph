@@ -4,5 +4,6 @@ dist
 *.sqlite-journal
 *.sqlite-wal
 .DS_Store
-.test-tmp-repo-*
+.test-tmp-*
+
 

@@ -47,7 +47,7 @@ export const FileWalkerLive = Layer.effect(
           return yield* Effect.fail(new WalkError({ message: `Root path does not exist: ${rootPath}` }))
         }
 
-        const ig = ignore.default ? ignore.default() : (ignore as any)()
+        const ig = (ignore as any).default ? (ignore as any).default() : (ignore as any)()
         // Add default ignores
         ig.add([
           "node_modules",

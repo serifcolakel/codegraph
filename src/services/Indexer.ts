@@ -5,7 +5,7 @@ import { FileWalker } from "./FileWalker.js"
 import { Parser } from "./Parser.js"
 import { IndexStore } from "./IndexStore.js"
 import { appConfig } from "../domain/config.js"
-import type { WalkError, ParseError, StoreError } from "../domain/errors.js"
+import { WalkError, type ParseError, type StoreError } from "../domain/errors.js"
 import type { IndexReport, FileScanResult } from "../domain/models.js"
 
 export interface IndexerOptions {
@@ -97,8 +97,7 @@ export const IndexerLive = Layer.effect(
           scanned =>
             Effect.gen(function* () {
               const content = yield* fs.readFileString(scanned.absolutePath).pipe(
-                Effect.mapError(e => ({
-                  _tag: "WalkError" as const,
+                Effect.mapError(e => new WalkError({
                   message: `Failed to read file ${scanned.absolutePath}`,
                   cause: e
                 }))
