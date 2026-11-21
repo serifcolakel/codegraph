@@ -54,9 +54,9 @@ class FundService:
 
         const report = yield* indexer.indexRepo(tmpDir, { name: "model-v2" })
 
-        // Coverage records parsed TypeScript and heuristic Python separately.
-        expect(report.coverage.parsed).toBe(1)
-        expect(report.coverage.partial).toBe(1)
+        // Both TypeScript and Python now produce AST-backed symbols.
+        expect(report.coverage.parsed).toBe(2)
+        expect(report.coverage.partial).toBe(0)
         expect(report.coverage.unknown).toBe(0)
         expect(report.coverage.languages.typescript).toBe(1)
         expect(report.coverage.languages.python).toBe(1)

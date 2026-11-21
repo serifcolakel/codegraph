@@ -9,6 +9,7 @@ import type {
   SymbolKind,
   SymbolVisibility
 } from "../domain/models.js"
+import { astParserFor } from "../parsers/index.js"
 import { parseGenericFile } from "./GenericParser.js"
 
 export interface Parser {
@@ -97,7 +98,21 @@ export const ParserLive = Layer.succeed(Parser, {
     Effect.try({
       try: () => {
         const language = languageForPath(filePath)
-        if (language && !isTypeScriptLanguage(language)) {
+        if (!language) {
+          return { path: filePath, symbols: [], edges: [], parseStatus: "unsupported" }
+        }
+
+        const astParser = astParserFor(language)
+        if (astParser) {
+          try {
+            return astParser.parse(filePath, content)
+          } catch {
+            // Keep the regex fallback when a grammar is unavailable or fails.
+            return { ...parseGenericFile(language, filePath, content), parseStatus: "partial" }
+          }
+        }
+
+        if (!isTypeScriptLanguage(language)) {
           return parseGenericFile(language, filePath, content)
         }
 
