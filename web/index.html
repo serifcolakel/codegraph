@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGraph - Local Code Index & Graph Visualizer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --border-color: #334155;
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --panel-bg: rgba(30, 41, 59, 0.95);
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #e2e8f0;
+      --text-primary: #0f172a;
+      --text-secondary: #64748b;
+      --border-color: #cbd5e1;
+      --accent: #0284c7;
+      --accent-hover: #0369a1;
+      --panel-bg: rgba(255, 255, 255, 0.95);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    select, input[type="text"] {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.875rem;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      max-width: 380px;
+    }
+
+    .search-box input {
+      width: 100%;
+    }
+
+    .search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-top: 4px;
+      max-height: 280px;
+      overflow-y: auto;
+      display: none;
+      z-index: 50;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    }
+
+    .search-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .search-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .search-item-title {
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--accent);
+    }
+
+    .search-item-sub {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .btn {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+
+    .btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    #cy-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+    }
+
+    #cy {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #sidePanel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 360px;
+      max-height: calc(100% - 32px);
+      background: var(--panel-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 20;
+      overflow-y: auto;
+      box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      word-break: break-all;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      background: var(--bg-tertiary);
+    }
+
+    .badge-class { background: #4f46e5; color: #fff; }
+    .badge-function { background: #06b6d4; color: #fff; }
+    .badge-interface { background: #10b981; color: #fff; }
+    .badge-type { background: #f59e0b; color: #000; }
+    .badge-const { background: #ec4899; color: #fff; }
+    .badge-file { background: #6366f1; color: #fff; }
+
+    .signature-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+
+    .edge-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.8rem;
+    }
+
+    .edge-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .edge-item:hover {
+      border-color: var(--accent);
+    }
+
+    .legend {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.75rem;
+      z-index: 10;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="6" cy="6" r="3"/>
+        <circle cx="18" cy="18" r="3"/>
+        <circle cx="6" cy="18" r="3"/>
+        <path d="M6 9v6M9 6h6M8.5 15.5l7-7"/>
+      </svg>
+      CodeGraph
+    </div>
+
+    <div class="controls">
+      <select id="repoSelect"></select>
+
+      <button id="viewFileBtn" class="btn active">File Graph</button>
+
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search symbols (FTS5)..." autocomplete="off" />
+        <div id="searchDropdown" class="search-dropdown"></div>
+      </div>
+
+      <div class="slider-group">
+        <label for="depthSlider">Depth: <span id="depthVal">1</span></label>
+        <input type="range" id="depthSlider" min="1" max="4" value="1" />
+      </div>
+
+      <button id="resetLayoutBtn" class="btn">Fit View</button>
+      <button id="themeToggleBtn" class="btn">🌓</button>
+    </div>
+  </header>
+
+  <div id="cy-container">
+    <div id="cy"></div>
+    <div id="loadingOverlay" class="loading-overlay">Loading graph...</div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background: #6366f1;"></span> File</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #4f46e5;"></span> Class</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #06b6d4;"></span> Function</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> Interface</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> Type</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #ec4899;"></span> Const</div>
+    </div>
+
+    <div id="sidePanel">
+      <div class="panel-header">
+        <div>
+          <span id="panelBadge" class="badge">Kind</span>
+          <h3 id="panelTitle" class="panel-title">Symbol Name</h3>
+        </div>
+        <button id="closePanelBtn" class="btn" style="padding: 2px 8px;">✕</button>
+      </div>
+
+      <div id="panelLocation" style="font-size: 0.8rem; color: var(--text-secondary);"></div>
+
+      <div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">SIGNATURE</div>
+        <div id="panelSignature" class="signature-box"></div>
+      </div>
+
+      <div id="panelCallersSection">
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">CALLERS / USERS (<span id="panelCallersCount">0</span>)</div>
+        <div id="panelCallersList" class="edge-list"></div>
+      </div>
+
+      <div id="panelCalleesSection">
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">CALLEES / REFERENCES (<span id="panelCalleesCount">0</span>)</div>
+        <div id="panelCalleesList" class="edge-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let cy = null;
+    let currentRepoId = "";
+    let currentMode = "file"; // "file" or "symbol"
+    let currentFocus = null;
+
+    const kindColors = {
+      file: "#6366f1",
+      class: "#4f46e5",
+      function: "#06b6d4",
+      interface: "#10b981",
+      type: "#f59e0b",
+      const: "#ec4899",
+      method: "#8b5cf6",
+      property: "#a855f7",
+      enum: "#14b8a6"
+    };
+
+    const edgeColors = {
+      call: "#38bdf8",
+      import: "#a78bfa",
+      extends: "#34d399",
+      implements: "#fbbf24",
+      contains: "#64748b",
+      reference: "#f472b6"
+    };
+
+    function initCytoscape() {
+      cy = cytoscape({
+        container: document.getElementById("cy"),
+        style: [
+          {
+            selector: "node",
+            style: {
+              "label": "data(label)",
+              "color": "#f8fafc",
+              "font-size": "11px",
+              "text-valign": "bottom",
+              "text-margin-y": 6,
+              "background-color": "data(color)",
+              "width": "data(size)",
+              "height": "data(size)",
+              "min-zoomed-font-size": 8,
+              "text-outline-color": "#0f172a",
+              "text-outline-width": 2
+            }
+          },
+          {
+            selector: "edge",
+            style: {
+              "width": "data(weight)",
+              "line-color": "data(color)",
+              "target-arrow-color": "data(color)",
+              "target-arrow-shape": "triangle",
+              "curve-style": "bezier",
+              "arrow-scale": 0.8,
+              "opacity": 0.7
+            }
+          },
+          {
+            selector: "edge[kind = 'import']",
+            style: {
+              "line-style": "dashed"
+            }
+          },
+          {
+            selector: "edge[kind = 'contains']",
+            style: {
+              "line-style": "dotted",
+              "target-arrow-shape": "none"
+            }
+          },
+          {
+            selector: "node:selected",
+            style: {
+              "border-width": 3,
+              "border-color": "#38bdf8"
+            }
+          }
+        ],
+        layout: { name: "cose", animate: false }
+      });
+
+      cy.on("tap", "node", async function(evt) {
+        const node = evt.target;
+        const data = node.data();
+
+        if (currentMode === "file") {
+          // On clicking a file node, load outline / neighborhood of its primary symbols
+          // Or switch to symbol neighborhood
+          if (data.symbolId) {
+            loadSymbolNeighborhood(data.symbolId);
+          } else {
+            // Expand file to symbol level
+            loadSymbolLevel(data.id);
+          }
+        } else {
+          showSymbolDetails(data.id);
+        }
+      });
+    }
+
+    async function loadRepos() {
+      try {
+        const res = await fetch("/api/repos");
+        const repos = await res.json();
+        const select = document.getElementById("repoSelect");
+        select.innerHTML = "";
+
+        if (repos.length === 0) {
+          select.innerHTML = "<option>No repos indexed</option>";
+          return;
+        }
+
+        repos.forEach(r => {
+          const opt = document.createElement("option");
+          opt.value = r.id;
+          opt.textContent = `${r.name} (${r.rootPath})`;
+          select.appendChild(opt);
+        });
+
+        currentRepoId = repos[0].id;
+        loadFileGraph();
+      } catch (err) {
+        console.error("Failed to load repos:", err);
+      }
+    }
+
+    async function loadFileGraph() {
+      if (!currentRepoId) return;
+      showLoading(true);
+      currentMode = "file";
+      document.getElementById("viewFileBtn").classList.add("active");
+
+      try {
+        const res = await fetch(`/api/graph?repo=${encodeURIComponent(currentRepoId)}&level=file`);
+        const graph = await res.json();
+
+        const elements = [];
+        graph.nodes.forEach(n => {
+          const size = Math.max(24, Math.min(65, 24 + (n.inDegree || 0) * 4));
+          const label = n.path.split("/").pop();
+          elements.push({
+            data: {
+              id: n.id,
+              path: n.path,
+              label,
+              color: kindColors.file,
+              size,
+              kind: "file",
+              symbolCount: n.symbolCount,
+              inDegree: n.inDegree
+            }
+          });
+        });
+
+        graph.edges.forEach((e, idx) => {
+          const weight = Math.max(1, Math.min(6, Math.log2(e.weight + 1) + 1));
+          elements.push({
+            data: {
+              id: `edge_${idx}`,
+              source: e.srcFileId,
+              target: e.dstFileId,
+              color: edgeColors.import,
+              weight,
+              kind: "import"
+            }
+          });
+        });
+
+        cy.elements().remove();
+        cy.add(elements);
+        cy.layout({
+          name: "cose",
+          animate: elements.length < 200,
+          idealEdgeLength: 80,
+          nodeOverlap: 20
+        }).run();
+      } catch (err) {
+        console.error("Failed to load file graph:", err);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    async function loadSymbolNeighborhood(symbolId) {
+      if (!symbolId) return;
+      showLoading(true);
+      currentMode = "symbol";
+      currentFocus = symbolId;
+      document.getElementById("viewFileBtn").classList.remove("active");
+
+      const depth = document.getElementById("depthSlider").value;
+
+      try {
+        const res = await fetch(`/api/graph?repo=${encodeURIComponent(currentRepoId)}&level=symbol&focus=${encodeURIComponent(symbolId)}&depth=${depth}`);
+        const graph = await res.json();
+
+        const elements = [];
+        graph.nodes.forEach(n => {
+          const size = Math.max(22, Math.min(60, 22 + (n.inDegree || 0) * 4));
+          elements.push({
+            data: {
+              id: n.id,
+              label: n.name,
+              color: kindColors[n.kind] || "#94a3b8",
+              size,
+              kind: n.kind,
+              filePath: n.filePath,
+              startLine: n.startLine,
+              endLine: n.endLine,
+              signature: n.signature,
+              exported: n.exported,
+              inDegree: n.inDegree
+            }
+          });
+        });
+
+        graph.edges.forEach((e, idx) => {
+          elements.push({
+            data: {
+              id: e.id || `edge_${idx}`,
+              source: e.srcSymbolId,
+              target: e.dstSymbolId,
+              color: edgeColors[e.kind] || "#64748b",
+              weight: 2,
+              kind: e.kind
+            }
+          });
+        });
+
+        cy.elements().remove();
+        cy.add(elements);
+        cy.layout({
+          name: "cose",
+          animate: elements.length < 300,
+          idealEdgeLength: 90
+        }).run();
+
+        showSymbolDetails(symbolId);
+      } catch (err) {
+        console.error("Failed to load symbol neighborhood:", err);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    async function loadSymbolLevel(fileId) {
+      // Find symbols in this file from search or outline
+      const node = cy.getElementById(fileId);
+      if (node.length > 0) {
+        const path = node.data("path");
+        const res = await fetch(`/api/search?q=${encodeURIComponent(path.split("/").pop().replace(/\.[^/.]+$/, ""))}&repo=${encodeURIComponent(currentRepoId)}`);
+        const results = await res.json();
+        if (results.length > 0) {
+          loadSymbolNeighborhood(results[0].id);
+        }
+      }
+    }
+
+    async function showSymbolDetails(symbolId) {
+      try {
+        const res = await fetch(`/api/symbol/${encodeURIComponent(symbolId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const sym = data.symbol;
+
+        const panel = document.getElementById("sidePanel");
+        document.getElementById("panelBadge").textContent = sym.kind;
+        document.getElementById("panelBadge").className = `badge badge-${sym.kind}`;
+        document.getElementById("panelTitle").textContent = sym.name;
+        document.getElementById("panelLocation").textContent = `${sym.filePath}:${sym.startLine}-${sym.endLine}`;
+        document.getElementById("panelSignature").textContent = sym.signature || sym.name;
+
+        // Callers list
+        const callersList = document.getElementById("panelCallersList");
+        callersList.innerHTML = "";
+        document.getElementById("panelCallersCount").textContent = data.incomingEdges.length;
+
+        data.incomingEdges.forEach(e => {
+          const item = document.createElement("div");
+          item.className = "edge-item";
+          const srcName = e.sourceSymbol ? e.sourceSymbol.name : e.srcSymbolId.split("#")[1] || e.srcSymbolId;
+          item.innerHTML = `<span><strong>${srcName}</strong> (${e.kind})</span><span style="color: var(--accent); font-size: 0.75rem;">Jump →</span>`;
+          item.onclick = () => loadSymbolNeighborhood(e.srcSymbolId);
+          callersList.appendChild(item);
+        });
+
+        // Callees list
+        const calleesList = document.getElementById("panelCalleesList");
+        calleesList.innerHTML = "";
+        document.getElementById("panelCalleesCount").textContent = data.outgoingEdges.length;
+
+        data.outgoingEdges.forEach(e => {
+          const item = document.createElement("div");
+          item.className = "edge-item";
+          const dstName = e.targetSymbol ? e.targetSymbol.name : e.dstSymbolId.split("#")[1] || e.dstSymbolId;
+          item.innerHTML = `<span><strong>${dstName}</strong> (${e.kind})</span><span style="color: var(--accent); font-size: 0.75rem;">Jump →</span>`;
+          item.onclick = () => loadSymbolNeighborhood(e.dstSymbolId);
+          calleesList.appendChild(item);
+        });
+
+        panel.style.display = "flex";
+      } catch (err) {
+        console.error("Failed to load symbol details:", err);
+      }
+    }
+
+    function showLoading(show) {
+      document.getElementById("loadingOverlay").style.display = show ? "flex" : "none";
+    }
+
+    // Search Autocomplete
+    const searchInput = document.getElementById("searchInput");
+    const searchDropdown = document.getElementById("searchDropdown");
+    let searchTimeout = null;
+
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchTimeout);
+      const q = searchInput.value.trim();
+      if (!q) {
+        searchDropdown.style.display = "none";
+        return;
+      }
+
+      searchTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&repo=${encodeURIComponent(currentRepoId)}`);
+          const items = await res.json();
+          searchDropdown.innerHTML = "";
+
+          if (items.length === 0) {
+            searchDropdown.innerHTML = '<div style="padding: 8px 12px; font-size: 0.8rem; color: var(--text-secondary);">No symbols found</div>';
+          } else {
+            items.forEach(item => {
+              const el = document.createElement("div");
+              el.className = "search-item";
+              el.innerHTML = `
+                <div class="search-item-title">${item.name} <span class="badge badge-${item.kind}">${item.kind}</span></div>
+                <div class="search-item-sub">${item.filePath}:${item.startLine}</div>
+              `;
+              el.onclick = () => {
+                searchDropdown.style.display = "none";
+                searchInput.value = item.name;
+                loadSymbolNeighborhood(item.id);
+              };
+              searchDropdown.appendChild(el);
+            });
+          }
+          searchDropdown.style.display = "block";
+        } catch (err) {
+          console.error("Search failed:", err);
+        }
+      }, 200);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+        searchDropdown.style.display = "none";
+      }
+    });
+
+    // UI Event Handlers
+    document.getElementById("repoSelect").addEventListener("change", (e) => {
+      currentRepoId = e.target.value;
+      loadFileGraph();
+    });
+
+    document.getElementById("viewFileBtn").addEventListener("click", () => {
+      loadFileGraph();
+    });
+
+    document.getElementById("depthSlider").addEventListener("input", (e) => {
+      document.getElementById("depthVal").textContent = e.target.value;
+      if (currentMode === "symbol" && currentFocus) {
+        loadSymbolNeighborhood(currentFocus);
+      }
+    });
+
+    document.getElementById("resetLayoutBtn").addEventListener("click", () => {
+      if (cy) cy.fit();
+    });
+
+    document.getElementById("closePanelBtn").addEventListener("click", () => {
+      document.getElementById("sidePanel").style.display = "none";
+    });
+
+    document.getElementById("themeToggleBtn").addEventListener("click", () => {
+      const current = document.body.getAttribute("data-theme");
+      const next = current === "light" ? "dark" : "light";
+      document.body.setAttribute("data-theme", next);
+    });
+
+    // Initialize
+    window.addEventListener("DOMContentLoaded", () => {
+      initCytoscape();
+      loadRepos();
+    });
+  </script>
+</body>
+</html>

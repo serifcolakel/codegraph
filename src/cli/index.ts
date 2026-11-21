@@ -8,7 +8,8 @@ import { FileWalkerLive } from "../services/FileWalker.js"
 import { ParserLive } from "../services/Parser.js"
 import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
 import { Indexer, IndexerLive } from "../services/Indexer.js"
-import { GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
+import { serveHttp } from "../http/index.js"
+import { GraphQueryLive } from "../services/GraphQuery.js"
 
 // 1. Index command
 const indexCommand = Command.make(
@@ -69,7 +70,9 @@ const serveCommand = Command.make(
   },
   ({ port }) =>
     Effect.gen(function* () {
-      yield* Console.log(`codegraph serve: HTTP API and Graph visualization starting on http://localhost:${port}`)
+      const store = yield* IndexStore
+      yield* store.initSchema()
+      yield* serveHttp(port)
     })
 )
 
