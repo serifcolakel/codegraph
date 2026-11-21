@@ -1,14 +1,14 @@
-import { describe, expect } from "vitest"
+import { FileSystem, Path } from "@effect/platform"
+import { NodeFileSystem, NodePath } from "@effect/platform-node"
+import * as Sqlite from "@effect/sql-sqlite-node"
 import { it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
-import * as Sqlite from "@effect/sql-sqlite-node"
-import { NodeFileSystem, NodePath } from "@effect/platform-node"
-import { FileSystem, Path } from "@effect/platform"
+import { describe, expect } from "vitest"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
-import { ParserLive } from "../src/services/Parser.js"
-import { IndexStore, IndexStoreLive } from "../src/services/IndexStore.js"
-import { Indexer, IndexerLive } from "../src/services/Indexer.js"
 import { GraphQuery, GraphQueryLive } from "../src/services/GraphQuery.js"
+import { Indexer, IndexerLive } from "../src/services/Indexer.js"
+import { IndexStoreLive } from "../src/services/IndexStore.js"
+import { ParserLive } from "../src/services/Parser.js"
 
 describe("GraphQuery service", () => {
   it.effect("executes graph queries correctly over an indexed codebase", () =>
@@ -18,7 +18,7 @@ describe("GraphQuery service", () => {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
 
-      const tmpDir = path.resolve("./.test-tmp-query-" + Date.now())
+      const tmpDir = path.resolve(`./.test-tmp-query-${Date.now()}`)
       yield* fs.makeDirectory(tmpDir, { recursive: true })
 
       try {
@@ -61,15 +61,21 @@ export function runCalculation(x: number, y: number): number {
         expect(searchResults.length).toBeGreaterThan(0)
         expect(searchResults[0]?.name).toBe("AddOperation")
 
+        // Empty query seeds the symbol-level view with ranked symbols
+        const seeded = yield* query.searchSymbols("", 10, report.repoId)
+        expect(seeded.length).toBeGreaterThan(0)
+        expect(seeded.some((s) => s.name === "AddOperation")).toBe(true)
+
         // 3. Test outlineFile
         const outline = yield* query.outlineFile(report.repoId, "calculator.ts")
         expect(outline.length).toBeGreaterThanOrEqual(2)
-        const names = outline.map(s => s.name)
+        const names = outline.map((s) => s.name)
         expect(names).toContain("Operation")
         expect(names).toContain("AddOperation")
+        expect(outline.every((s) => typeof s.exported === "boolean")).toBe(true)
 
         // 4. Test getSymbol & findReferences
-        const addOpSymbol = searchResults[0]!
+        const addOpSymbol = searchResults[0]
         const details = yield* query.getSymbol(addOpSymbol.id)
         expect(details.symbol.name).toBe("AddOperation")
 
@@ -77,14 +83,21 @@ export function runCalculation(x: number, y: number): number {
         const neighborhood = yield* query.neighborhood(addOpSymbol.id, 2)
         expect(neighborhood.nodes.length).toBeGreaterThan(0)
 
+        const missing = yield* query.neighborhood("does-not-exist").pipe(Effect.flip)
+        expect(missing._tag).toBe("NotFoundError")
+
         // 6. Test repoMap
         const mapText = yield* query.repoMap(report.repoId, 1000)
         expect(mapText).toContain("calculator.ts:")
         expect(mapText).toContain("AddOperation")
 
-        // 7. Test fileGraph
+        // 7. Test fileGraph. The cross-file `new AddOperation()` call must
+        // resolve to calculator.ts instead of being dropped or misattributed.
         const fg = yield* query.fileGraph(report.repoId)
         expect(fg.nodes.length).toBe(2)
+        expect(fg.edges.some((e) => e.srcPath === "app.ts" && e.dstPath === "calculator.ts")).toBe(
+          true
+        )
       } finally {
         yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.ignore)
       }

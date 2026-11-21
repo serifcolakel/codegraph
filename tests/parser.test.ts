@@ -1,6 +1,6 @@
-import { describe, expect } from "vitest"
 import { it } from "@effect/vitest"
 import { Effect } from "effect"
+import { describe, expect } from "vitest"
 import { Parser, ParserLive } from "../src/services/Parser.js"
 
 describe("Parser service", () => {
@@ -38,7 +38,7 @@ export type UserId = string;
 
       expect(parsed.path).toBe("src/user.ts")
 
-      const symbolNames = parsed.symbols.map(s => s.name)
+      const symbolNames = parsed.symbols.map((s) => s.name)
       expect(symbolNames).toContain("Loggable")
       expect(symbolNames).toContain("UserService")
       expect(symbolNames).toContain("UserService.log")
@@ -47,21 +47,35 @@ export type UserId = string;
       expect(symbolNames).toContain("UserId")
 
       // Check contains edges
-      const containsEdges = parsed.edges.filter(e => e.kind === "contains")
-      expect(containsEdges.some(e => e.srcName === "UserService" && e.dstName === "UserService.log")).toBe(true)
-      expect(containsEdges.some(e => e.srcName === "UserService" && e.dstName === "UserService.getUser")).toBe(true)
+      const containsEdges = parsed.edges.filter((e) => e.kind === "contains")
+      expect(
+        containsEdges.some((e) => e.srcName === "UserService" && e.dstName === "UserService.log")
+      ).toBe(true)
+      expect(
+        containsEdges.some(
+          (e) => e.srcName === "UserService" && e.dstName === "UserService.getUser"
+        )
+      ).toBe(true)
 
       // Check extends edge
-      const extendsEdges = parsed.edges.filter(e => e.kind === "extends")
-      expect(extendsEdges.some(e => e.srcName === "UserService" && e.dstName === "BaseService")).toBe(true)
+      const extendsEdges = parsed.edges.filter((e) => e.kind === "extends")
+      expect(
+        extendsEdges.some((e) => e.srcName === "UserService" && e.dstName === "BaseService")
+      ).toBe(true)
 
       // Check implements edge
-      const implementsEdges = parsed.edges.filter(e => e.kind === "implements")
-      expect(implementsEdges.some(e => e.srcName === "UserService" && e.dstName === "Loggable")).toBe(true)
+      const implementsEdges = parsed.edges.filter((e) => e.kind === "implements")
+      expect(
+        implementsEdges.some((e) => e.srcName === "UserService" && e.dstName === "Loggable")
+      ).toBe(true)
 
-      // Check call edge
-      const callEdges = parsed.edges.filter(e => e.kind === "call")
-      expect(callEdges.some(e => e.srcName === "UserService.getUser" && e.dstName === "log")).toBe(true)
+      // Check call edge (this.log() resolves to the enclosing class method)
+      const callEdges = parsed.edges.filter((e) => e.kind === "call")
+      expect(
+        callEdges.some(
+          (e) => e.srcName === "UserService.getUser" && e.dstName === "UserService.log"
+        )
+      ).toBe(true)
     }).pipe(Effect.provide(ParserLive))
   )
 })

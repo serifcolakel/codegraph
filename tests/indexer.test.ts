@@ -1,13 +1,13 @@
-import { describe, expect } from "vitest"
+import { FileSystem, Path } from "@effect/platform"
+import { NodeFileSystem, NodePath } from "@effect/platform-node"
+import * as Sqlite from "@effect/sql-sqlite-node"
 import { it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
-import * as Sqlite from "@effect/sql-sqlite-node"
-import { NodeFileSystem, NodePath } from "@effect/platform-node"
-import { FileSystem, Path } from "@effect/platform"
-import { FileWalker, FileWalkerLive } from "../src/services/FileWalker.js"
-import { Parser, ParserLive } from "../src/services/Parser.js"
-import { IndexStore, IndexStoreLive } from "../src/services/IndexStore.js"
+import { describe, expect } from "vitest"
+import { FileWalkerLive } from "../src/services/FileWalker.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
+import { IndexStore, IndexStoreLive } from "../src/services/IndexStore.js"
+import { ParserLive } from "../src/services/Parser.js"
 
 describe("Indexer service (incremental indexing)", () => {
   it.effect("indexes a repository and skips unchanged files on subsequent runs", () =>
@@ -18,15 +18,21 @@ describe("Indexer service (incremental indexing)", () => {
       const path = yield* Path.Path
 
       // Create a temporary test repo directory
-      const tmpDir = path.resolve("./.test-tmp-repo-" + Date.now())
+      const tmpDir = path.resolve(`./.test-tmp-repo-${Date.now()}`)
       yield* fs.makeDirectory(tmpDir, { recursive: true })
 
       try {
         const fileA = path.join(tmpDir, "a.ts")
         const fileB = path.join(tmpDir, "b.ts")
 
-        yield* fs.writeFileString(fileA, "export function add(x: number, y: number): number { return x + y; }")
-        yield* fs.writeFileString(fileB, "import { add } from './a'; export function calc() { return add(1, 2); }")
+        yield* fs.writeFileString(
+          fileA,
+          "export function add(x: number, y: number): number { return x + y; }"
+        )
+        yield* fs.writeFileString(
+          fileB,
+          "import { add } from './a'; export function calc() { return add(1, 2); }"
+        )
 
         // 1. Initial indexing
         const report1 = yield* indexer.indexRepo(tmpDir, { name: "test-repo" })
@@ -42,7 +48,10 @@ describe("Indexer service (incremental indexing)", () => {
         expect(report2.filesDeleted).toBe(0)
 
         // 3. Modify fileA -> only fileA should be re-indexed
-        yield* fs.writeFileString(fileA, "export function add(x: number, y: number, z = 0): number { return x + y + z; }")
+        yield* fs.writeFileString(
+          fileA,
+          "export function add(x: number, y: number, z = 0): number { return x + y + z; }"
+        )
         const report3 = yield* indexer.indexRepo(tmpDir, { name: "test-repo" })
         expect(report3.filesIndexed).toBe(1)
         expect(report3.filesSkipped).toBe(1)

@@ -1,42 +1,58 @@
 #!/usr/bin/env node
-import { Command, Args, Options } from "@effect/cli"
+import { Args, Command, Options } from "@effect/cli"
+import { FileSystem, type Path } from "@effect/platform"
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
 import * as Sqlite from "@effect/sql-sqlite-node"
-import { Console, Effect, Layer } from "effect"
+import { Console, Effect, Layer, ManagedRuntime, Stream } from "effect"
 import { appConfig } from "../domain/config.js"
-import { FileWalkerLive } from "../services/FileWalker.js"
-import { ParserLive } from "../services/Parser.js"
-import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
-import { Indexer, IndexerLive } from "../services/Indexer.js"
 import { serveHttp } from "../http/index.js"
 import { startMcpServer } from "../mcp/index.js"
-import { GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
-import { FileSystem, Path } from "@effect/platform"
-import { ManagedRuntime } from "effect"
+import { FileWalkerLive } from "../services/FileWalker.js"
+import { type GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
+import { Indexer, IndexerLive } from "../services/Indexer.js"
+import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
+import { ParserLive } from "../services/Parser.js"
 
 // 1. Index command
 const indexCommand = Command.make(
   "index",
   {
     path: Args.text({ name: "path" }),
-    watch: Options.boolean("watch")
+    watch: Options.boolean("watch"),
+    force: Options.boolean("force")
   },
-  ({ path, watch }) =>
+  ({ path, watch, force }) =>
     Effect.gen(function* () {
       const indexer = yield* Indexer
       yield* Console.log(`Indexing repository at: ${path}...`)
 
-      const report = yield* indexer.indexRepo(path)
+      const report = yield* indexer.indexRepo(path, { force })
       yield* Console.log(`\n=== Indexing Complete ===`)
       yield* Console.log(`Repo:          ${report.repoName} (${report.repoId})`)
-      yield* Console.log(`Files indexed: ${report.filesIndexed} (skipped: ${report.filesSkipped}, deleted: ${report.filesDeleted})`)
+      yield* Console.log(
+        `Files indexed: ${report.filesIndexed} (skipped: ${report.filesSkipped}, deleted: ${report.filesDeleted})`
+      )
       yield* Console.log(`Symbols:       ${report.symbolsCount}`)
       yield* Console.log(`Edges:         ${report.edgesCount}`)
       yield* Console.log(`Duration:      ${report.durationMs}ms\n`)
 
       if (watch) {
+        const fs = yield* FileSystem.FileSystem
         yield* Console.log(`[Watch mode enabled] Watching for changes...`)
-        // Will be connected to watch mode stream in phase 5
+
+        const reindex = indexer.indexRepo(path).pipe(
+          Effect.tap((report) =>
+            Console.log(
+              `[watch] ${report.filesIndexed} indexed, ${report.filesSkipped} skipped, ${report.filesDeleted} deleted (${report.durationMs}ms)`
+            )
+          ),
+          Effect.catchAll((error) => Console.error(`[watch] re-index failed: ${error}`))
+        )
+
+        yield* fs.watch(path, { recursive: true }).pipe(
+          Stream.debounce("500 millis"),
+          Stream.runForEach(() => reindex)
+        )
       }
     })
 )
@@ -84,7 +100,9 @@ const mcpCommand = Command.make("mcp", {}, () =>
   Effect.gen(function* () {
     const store = yield* IndexStore
     yield* store.initSchema()
-    const runtime = yield* Effect.runtime<IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path>()
+    const runtime = yield* Effect.runtime<
+      IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path
+    >()
     const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
     yield* Effect.promise(() => startMcpServer(managedRuntime))
   })

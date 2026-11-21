@@ -1,16 +1,16 @@
-import { describe, expect } from "vitest"
-import { it } from "@effect/vitest"
 import { createServer } from "node:http"
-import { Effect, Layer } from "effect"
-import * as Sqlite from "@effect/sql-sqlite-node"
-import { NodeFileSystem, NodePath, NodeHttpServer } from "@effect/platform-node"
 import { FileSystem, Path } from "@effect/platform"
-import { FileWalkerLive } from "../src/services/FileWalker.js"
-import { ParserLive } from "../src/services/Parser.js"
-import { IndexStoreLive } from "../src/services/IndexStore.js"
-import { Indexer, IndexerLive } from "../src/services/Indexer.js"
-import { GraphQueryLive } from "../src/services/GraphQuery.js"
+import { NodeFileSystem, NodeHttpServer, NodePath } from "@effect/platform-node"
+import * as Sqlite from "@effect/sql-sqlite-node"
+import { it } from "@effect/vitest"
+import { Effect, Layer } from "effect"
+import { describe, expect } from "vitest"
 import { makeHttpRouter } from "../src/http/index.js"
+import { FileWalkerLive } from "../src/services/FileWalker.js"
+import { GraphQueryLive } from "../src/services/GraphQuery.js"
+import { Indexer, IndexerLive } from "../src/services/Indexer.js"
+import { IndexStoreLive } from "../src/services/IndexStore.js"
+import { ParserLive } from "../src/services/Parser.js"
 
 describe("HTTP API & visualization", () => {
   it.live("serves repos, file graph, search, and static HTML", () =>
@@ -19,7 +19,7 @@ describe("HTTP API & visualization", () => {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
 
-      const tmpDir = path.resolve("./.test-tmp-http-" + Date.now())
+      const tmpDir = path.resolve(`./.test-tmp-http-${Date.now()}`)
       yield* fs.makeDirectory(tmpDir, { recursive: true })
 
       try {
@@ -43,7 +43,7 @@ describe("HTTP API & visualization", () => {
 
             // 3. Test GET /api/repos
             const reposRes = yield* Effect.tryPromise(() =>
-              fetch(`http://127.0.0.1:${TEST_PORT}/api/repos`).then(r => r.json())
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/repos`).then((r) => r.json())
             )
             expect(Array.isArray(reposRes)).toBe(true)
             expect(reposRes.length).toBeGreaterThan(0)
@@ -51,14 +51,16 @@ describe("HTTP API & visualization", () => {
 
             // 4. Test GET /api/graph?repo=&level=file
             const graphRes = yield* Effect.tryPromise(() =>
-              fetch(`http://127.0.0.1:${TEST_PORT}/api/graph?repo=${encodeURIComponent(report.repoId)}&level=file`).then(r => r.json())
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/graph?repo=${encodeURIComponent(report.repoId)}&level=file`
+              ).then((r) => r.json())
             )
             expect(graphRes.nodes).toBeDefined()
             expect(graphRes.nodes.length).toBe(1)
 
             // 5. Test GET /api/search?q=greet
             const searchRes = yield* Effect.tryPromise(() =>
-              fetch(`http://127.0.0.1:${TEST_PORT}/api/search?q=greet`).then(r => r.json())
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/search?q=greet`).then((r) => r.json())
             )
             expect(Array.isArray(searchRes)).toBe(true)
             expect(searchRes.length).toBeGreaterThan(0)
@@ -66,7 +68,7 @@ describe("HTTP API & visualization", () => {
 
             // 6. Test GET / - HTML serving
             const htmlRes = yield* Effect.tryPromise(() =>
-              fetch(`http://127.0.0.1:${TEST_PORT}/`).then(r => r.text())
+              fetch(`http://127.0.0.1:${TEST_PORT}/`).then((r) => r.text())
             )
             expect(htmlRes).toContain("CodeGraph")
             expect(htmlRes).toContain("cytoscape")

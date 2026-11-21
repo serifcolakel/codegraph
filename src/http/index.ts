@@ -1,10 +1,15 @@
 import { createServer } from "node:http"
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "@effect/platform"
+import {
+  FileSystem,
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+  Path
+} from "@effect/platform"
 import { NodeHttpServer } from "@effect/platform-node"
-import { FileSystem, Path } from "@effect/platform"
 import { Effect, Schema } from "effect"
-import { IndexStore } from "../services/IndexStore.js"
 import { GraphQuery } from "../services/GraphQuery.js"
+import { IndexStore } from "../services/IndexStore.js"
 
 export const makeHttpRouter = Effect.gen(function* () {
   const store = yield* IndexStore
@@ -17,11 +22,11 @@ export const makeHttpRouter = Effect.gen(function* () {
     HttpRouter.get(
       "/api/repos",
       Effect.gen(function* () {
-        const repos = yield* store.listRepos().pipe(
-          Effect.catchAll(e =>
-            HttpServerResponse.json({ error: e.message }, { status: 500 })
+        const repos = yield* store
+          .listRepos()
+          .pipe(
+            Effect.catchAll((e) => HttpServerResponse.json({ error: e.message }, { status: 500 }))
           )
-        )
         return yield* HttpServerResponse.json(repos)
       })
     ),
@@ -39,27 +44,31 @@ export const makeHttpRouter = Effect.gen(function* () {
 
         if (level === "symbol" || focus) {
           if (focus) {
-            const result = yield* query.neighborhood(focus, depth).pipe(
-              Effect.catchAll(e =>
-                HttpServerResponse.json({ error: e.message }, { status: 500 })
+            const result = yield* query
+              .neighborhood(focus, depth)
+              .pipe(
+                Effect.catchAll((e) =>
+                  HttpServerResponse.json({ error: e.message }, { status: 500 })
+                )
               )
-            )
             return yield* HttpServerResponse.json(result)
           } else {
-            const search = yield* query.searchSymbols("", 100, repo).pipe(
-              Effect.catchAll(e =>
-                HttpServerResponse.json({ error: e.message }, { status: 500 })
+            const search = yield* query
+              .searchSymbols("", 100, repo)
+              .pipe(
+                Effect.catchAll((e) =>
+                  HttpServerResponse.json({ error: e.message }, { status: 500 })
+                )
               )
-            )
             return yield* HttpServerResponse.json({ nodes: search, edges: [] })
           }
         }
 
-        const fileGraph = yield* query.fileGraph(repo).pipe(
-          Effect.catchAll(e =>
-            HttpServerResponse.json({ error: e.message }, { status: 500 })
+        const fileGraph = yield* query
+          .fileGraph(repo)
+          .pipe(
+            Effect.catchAll((e) => HttpServerResponse.json({ error: e.message }, { status: 500 }))
           )
-        )
         return yield* HttpServerResponse.json(fileGraph)
       })
     ),
@@ -73,11 +82,11 @@ export const makeHttpRouter = Effect.gen(function* () {
         const q = url.searchParams.get("q") ?? ""
         const repo = url.searchParams.get("repo") ?? undefined
 
-        const results = yield* query.searchSymbols(q, 30, repo).pipe(
-          Effect.catchAll(e =>
-            HttpServerResponse.json({ error: e.message }, { status: 500 })
+        const results = yield* query
+          .searchSymbols(q, 30, repo)
+          .pipe(
+            Effect.catchAll((e) => HttpServerResponse.json({ error: e.message }, { status: 500 }))
           )
-        )
         return yield* HttpServerResponse.json(results)
       })
     ),
@@ -86,17 +95,18 @@ export const makeHttpRouter = Effect.gen(function* () {
     HttpRouter.get(
       "/api/symbol/:id",
       Effect.gen(function* () {
-        const params = yield* HttpRouter.schemaParams(
-          Schema.Struct({ id: Schema.String })
-        )
+        const params = yield* HttpRouter.schemaParams(Schema.Struct({ id: Schema.String }))
         const symbolId = decodeURIComponent(params.id)
 
         const details = yield* query.getSymbol(symbolId).pipe(
           Effect.catchTag("NotFoundError", () =>
             HttpServerResponse.json({ error: "Symbol not found" }, { status: 404 })
           ),
-          Effect.catchAll(e =>
-            HttpServerResponse.json({ error: (e as any).message ?? "Unknown error" }, { status: 500 })
+          Effect.catchAll((e) =>
+            HttpServerResponse.json(
+              { error: e._tag === "StoreError" ? e.message : "Unknown error" },
+              { status: 500 }
+            )
           )
         )
 
@@ -124,7 +134,9 @@ export const makeHttpRouter = Effect.gen(function* () {
         }
 
         if (!htmlContent) {
-          return yield* HttpServerResponse.text("CodeGraph web/index.html not found", { status: 404 })
+          return yield* HttpServerResponse.text("CodeGraph web/index.html not found", {
+            status: 404
+          })
         }
 
         return yield* HttpServerResponse.html(htmlContent)

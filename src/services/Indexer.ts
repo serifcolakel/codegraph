@@ -1,12 +1,11 @@
-import { Context, Effect, Layer } from "effect"
 import { FileSystem, Path } from "@effect/platform"
-import { NodeFileSystem, NodePath } from "@effect/platform-node"
-import { FileWalker } from "./FileWalker.js"
-import { Parser } from "./Parser.js"
-import { IndexStore } from "./IndexStore.js"
+import { Context, Effect, Layer } from "effect"
 import { appConfig } from "../domain/config.js"
-import { WalkError, type ParseError, type StoreError } from "../domain/errors.js"
-import type { IndexReport, FileScanResult } from "../domain/models.js"
+import { type ParseError, type StoreError, WalkError } from "../domain/errors.js"
+import type { FileScanResult, IndexReport } from "../domain/models.js"
+import { FileWalker } from "./FileWalker.js"
+import { IndexStore } from "./IndexStore.js"
+import { Parser } from "./Parser.js"
 
 export interface IndexerOptions {
   readonly force?: boolean
@@ -49,9 +48,8 @@ export const IndexerLive = Layer.effect(
         yield* Effect.logInfo(`Repository record loaded: ${repo.name} (${repo.id})`)
 
         // 3. Walk repository files
-        const ignoreGlobs = config.ignoreGlobs.split(",").map(s => s.trim())
         const scannedFiles: readonly FileScanResult[] = yield* walker
-          .walk(resolvedPath, ignoreGlobs)
+          .walk(resolvedPath, config.ignoreGlobs)
           .pipe(Effect.withSpan("FileWalker.walk"))
 
         yield* Effect.logInfo(`Discovered ${scannedFiles.length} candidate files in ${repo.name}`)
@@ -94,13 +92,16 @@ export const IndexerLive = Layer.effect(
         // 5. Process changed/new files in parallel with bounded concurrency
         yield* Effect.forEach(
           filesToProcess,
-          scanned =>
+          (scanned) =>
             Effect.gen(function* () {
               const content = yield* fs.readFileString(scanned.absolutePath).pipe(
-                Effect.mapError(e => new WalkError({
-                  message: `Failed to read file ${scanned.absolutePath}`,
-                  cause: e
-                }))
+                Effect.mapError(
+                  (e) =>
+                    new WalkError({
+                      message: `Failed to read file ${scanned.absolutePath}`,
+                      cause: e
+                    })
+                )
               )
 
               const parsed = yield* parser.parse(scanned.path, content)

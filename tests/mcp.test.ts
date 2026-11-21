@@ -1,19 +1,16 @@
-import { describe, expect } from "vitest"
-import { it } from "@effect/vitest"
-import { Effect, Layer, ManagedRuntime } from "effect"
-import * as Sqlite from "@effect/sql-sqlite-node"
-import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { FileSystem, Path } from "@effect/platform"
-import { FileWalkerLive } from "../src/services/FileWalker.js"
-import { ParserLive } from "../src/services/Parser.js"
-import { IndexStoreLive } from "../src/services/IndexStore.js"
-import { Indexer, IndexerLive } from "../src/services/Indexer.js"
-import { GraphQueryLive } from "../src/services/GraphQuery.js"
+import { NodeFileSystem, NodePath } from "@effect/platform-node"
+import * as Sqlite from "@effect/sql-sqlite-node"
+import { it } from "@effect/vitest"
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import { Effect, Layer, ManagedRuntime } from "effect"
+import { describe, expect } from "vitest"
 import { createMcpServer } from "../src/mcp/index.js"
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema
-} from "@modelcontextprotocol/sdk/types.js"
+import { FileWalkerLive } from "../src/services/FileWalker.js"
+import { type GraphQuery, GraphQueryLive } from "../src/services/GraphQuery.js"
+import { Indexer, IndexerLive } from "../src/services/Indexer.js"
+import { type IndexStore, IndexStoreLive } from "../src/services/IndexStore.js"
+import { ParserLive } from "../src/services/Parser.js"
 
 describe("MCP server tools", () => {
   it.live("handles MCP tool requests backed by Effect services", () =>
@@ -22,7 +19,7 @@ describe("MCP server tools", () => {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
 
-      const tmpDir = path.resolve("./.test-tmp-mcp-" + Date.now())
+      const tmpDir = path.resolve(`./.test-tmp-mcp-${Date.now()}`)
       yield* fs.makeDirectory(tmpDir, { recursive: true })
 
       try {
@@ -46,16 +43,30 @@ export class MemoryDataService implements DataService {
         expect(report.filesIndexed).toBe(1)
 
         // Create runtime and MCP server
-        const runtime = yield* Effect.runtime<any>()
+        const runtime = yield* Effect.runtime<
+          IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path
+        >()
         const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
         const mcpServer = createMcpServer(managedRuntime)
 
+        type RequestHandler = (request: unknown) => Promise<unknown>
+        interface ToolListResult {
+          readonly tools: ReadonlyArray<{ readonly name: string }>
+        }
+        interface ToolCallResult {
+          readonly content: ReadonlyArray<{ readonly text: string }>
+        }
+
+        const handlers = (mcpServer as unknown as { _requestHandlers: Map<string, RequestHandler> })
+          ._requestHandlers
+
         // 1. List tools
-        const listToolsHandler = (mcpServer as any)._requestHandlers.get(
-          ListToolsRequestSchema.shape.method.value
-        )
-        const toolsList = yield* Effect.promise(() => listToolsHandler({ method: "tools/list", params: {} }))
-        const toolNames = toolsList.tools.map((t: any) => t.name)
+        const listToolsHandler = handlers.get(ListToolsRequestSchema.shape.method.value)
+        if (!listToolsHandler) throw new Error("list tools handler not registered")
+        const toolsList = (yield* Effect.promise(() =>
+          listToolsHandler({ method: "tools/list", params: {} })
+        )) as ToolListResult
+        const toolNames = toolsList.tools.map((t) => t.name)
 
         expect(toolNames).toContain("repo_map")
         expect(toolNames).toContain("outline_file")
@@ -64,53 +75,41 @@ export class MemoryDataService implements DataService {
         expect(toolNames).toContain("neighborhood")
         expect(toolNames).toContain("read_file_range")
 
-        const callToolHandler = (mcpServer as any)._requestHandlers.get(
-          CallToolRequestSchema.shape.method.value
-        )
+        const callToolHandler = handlers.get(CallToolRequestSchema.shape.method.value)
+        if (!callToolHandler) throw new Error("call tool handler not registered")
+
+        const callTool = (name: string, args: Record<string, unknown>) =>
+          Effect.promise(() =>
+            callToolHandler({ method: "tools/call", params: { name, arguments: args } })
+          ).pipe(Effect.map((result) => result as ToolCallResult))
 
         // 2. Test search_symbol
-        const searchResult = yield* Effect.promise(() => callToolHandler({
-          method: "tools/call",
-          params: {
-            name: "search_symbol",
-            arguments: { query: "MemoryDataService" }
-          }
-        }))
-        expect(searchResult.content[0].text).toContain("MemoryDataService")
-        expect(searchResult.content[0].text).toContain("service.ts")
+        const searchResult = yield* callTool("search_symbol", { query: "MemoryDataService" })
+        expect(searchResult.content[0]?.text).toContain("MemoryDataService")
+        expect(searchResult.content[0]?.text).toContain("service.ts")
 
         // 3. Test outline_file
-        const outlineResult = yield* Effect.promise(() => callToolHandler({
-          method: "tools/call",
-          params: {
-            name: "outline_file",
-            arguments: { path: "service.ts", repoId: report.repoId }
-          }
-        }))
-        expect(outlineResult.content[0].text).toContain("DataService")
-        expect(outlineResult.content[0].text).toContain("MemoryDataService")
+        const outlineResult = yield* callTool("outline_file", {
+          path: "service.ts",
+          repoId: report.repoId
+        })
+        expect(outlineResult.content[0]?.text).toContain("DataService")
+        expect(outlineResult.content[0]?.text).toContain("MemoryDataService")
 
         // 4. Test repo_map
-        const repoMapResult = yield* Effect.promise(() => callToolHandler({
-          method: "tools/call",
-          params: {
-            name: "repo_map",
-            arguments: { repoId: report.repoId }
-          }
-        }))
-        expect(repoMapResult.content[0].text).toContain("service.ts:")
-        expect(repoMapResult.content[0].text).toContain("DataService")
+        const repoMapResult = yield* callTool("repo_map", { repoId: report.repoId })
+        expect(repoMapResult.content[0]?.text).toContain("service.ts:")
+        expect(repoMapResult.content[0]?.text).toContain("DataService")
 
         // 5. Test read_file_range
-        const readRangeResult = yield* Effect.promise(() => callToolHandler({
-          method: "tools/call",
-          params: {
-            name: "read_file_range",
-            arguments: { path: "service.ts", startLine: 1, endLine: 5, repoId: report.repoId }
-          }
-        }))
-        expect(readRangeResult.content[0].text).toContain("1 |")
-        expect(readRangeResult.content[0].text).toContain("DataService")
+        const readRangeResult = yield* callTool("read_file_range", {
+          path: "service.ts",
+          startLine: 1,
+          endLine: 5,
+          repoId: report.repoId
+        })
+        expect(readRangeResult.content[0]?.text).toContain("1 |")
+        expect(readRangeResult.content[0]?.text).toContain("DataService")
       } finally {
         yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.ignore)
       }

@@ -7,8 +7,14 @@
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "codegraph": "bun run src/cli/index.ts"
+    "test:watch": "vitest",
+    "codegraph": "bun run src/cli/index.ts",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
   },
   "dependencies": {
     "@effect/cli": "0.77.2",
@@ -23,6 +29,7 @@
     "ts-morph": "^28.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
     "@effect/vitest": "0.30.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.10.9",

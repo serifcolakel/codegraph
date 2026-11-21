@@ -1,7 +1,7 @@
 import { Context, Effect, Layer } from "effect"
-import { Project, SyntaxKind, Node } from "ts-morph"
+import { Node, Project, SyntaxKind } from "ts-morph"
 import { ParseError } from "../domain/errors.js"
-import type { ParsedFile, ParsedSymbol, ParsedEdge, SymbolKind } from "../domain/models.js"
+import type { ParsedEdge, ParsedFile, ParsedSymbol, SymbolKind } from "../domain/models.js"
 
 export interface Parser {
   readonly parse: (filePath: string, content: string) => Effect.Effect<ParsedFile, ParseError>
@@ -9,13 +9,15 @@ export interface Parser {
 
 export const Parser = Context.GenericTag<Parser>("@codegraph/Parser")
 
+const MAX_SIGNATURE_LENGTH = 200
+
 const getHeaderSignature = (text: string): string => {
-  const firstLine = text.split("\n")[0] ?? text
-  const braceIdx = firstLine.indexOf("{")
-  if (braceIdx !== -1) {
-    return firstLine.slice(0, braceIdx).trim()
-  }
-  return firstLine.trim()
+  const braceIdx = text.indexOf("{")
+  const header = braceIdx === -1 ? text : text.slice(0, braceIdx)
+  const normalized = header.replace(/\s+/g, " ").trim()
+  return normalized.length > MAX_SIGNATURE_LENGTH
+    ? `${normalized.slice(0, MAX_SIGNATURE_LENGTH - 3)}...`
+    : normalized
 }
 
 export const ParserLive = Layer.succeed(Parser, {
@@ -24,7 +26,10 @@ export const ParserLive = Layer.succeed(Parser, {
       try: () => {
         const project = new Project({
           useInMemoryFileSystem: true,
-          compilerOptions: { allowJs: true }
+          skipAddingFilesFromTsConfig: true,
+          skipFileDependencyResolution: true,
+          skipLoadingLibFiles: true,
+          compilerOptions: { allowJs: true, noLib: true }
         })
 
         const sourceFile = project.createSourceFile(filePath, content, { overwrite: true })
@@ -65,7 +70,7 @@ export const ParserLive = Layer.succeed(Parser, {
           if (baseClass?.getName()) {
             edges.push({
               srcName: name,
-              dstName: baseClass.getName()!,
+              dstName: baseClass.getName() ?? "",
               kind: "extends",
               srcLine: cls.getStartLineNumber()
             })
@@ -274,12 +279,21 @@ export const ParserLive = Layer.succeed(Parser, {
         }
 
         // 7. Imports
+        // Maps the local identifier introduced by an import to the module it
+        // came from, so cross-file calls/extends can be resolved by path.
+        const importedBindings = new Map<string, { specifier: string; importedName: string }>()
+
         for (const imp of sourceFile.getImportDeclarations()) {
           const moduleSpecifier = imp.getModuleSpecifierValue()
           const defaultImport = imp.getDefaultImport()
           if (defaultImport) {
+            const localName = defaultImport.getText()
+            importedBindings.set(localName, {
+              specifier: moduleSpecifier,
+              importedName: localName
+            })
             edges.push({
-              srcName: defaultImport.getText(),
+              srcName: localName,
               dstName: moduleSpecifier,
               kind: "import",
               srcLine: imp.getStartLineNumber(),
@@ -288,8 +302,14 @@ export const ParserLive = Layer.succeed(Parser, {
           }
 
           for (const named of imp.getNamedImports()) {
+            const importedName = named.getName()
+            const localName = named.getAliasNode()?.getText() ?? importedName
+            importedBindings.set(localName, {
+              specifier: moduleSpecifier,
+              importedName
+            })
             edges.push({
-              srcName: named.getName(),
+              srcName: localName,
               dstName: moduleSpecifier,
               kind: "import",
               srcLine: imp.getStartLineNumber(),
@@ -313,7 +333,16 @@ export const ParserLive = Layer.succeed(Parser, {
               return current.getName()
             }
             if (Node.isVariableDeclaration(current)) {
-              return current.getName()
+              // Only treat a variable as the enclosing symbol when it holds a
+              // function; otherwise `const op = new Foo()` would make "op" the
+              // caller of Foo instead of the surrounding function.
+              const initializer = current.getInitializer()
+              if (
+                initializer &&
+                (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))
+              ) {
+                return current.getName()
+              }
             }
             if (Node.isClassDeclaration(current)) {
               return current.getName()
@@ -323,27 +352,45 @@ export const ParserLive = Layer.succeed(Parser, {
           return undefined
         }
 
-        // 8. Call expressions
-        for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-          const expr = callExpr.getExpression()
+        // 8. Call expressions (both `foo()` and `new Foo()`)
+        const pushCallEdge = (callNode: Node, expr: Node) => {
           let calledName: string | undefined
+          let importedBinding: { specifier: string; importedName: string } | undefined
+
           if (Node.isIdentifier(expr)) {
             calledName = expr.getText()
+            importedBinding = importedBindings.get(calledName)
           } else if (Node.isPropertyAccessExpression(expr)) {
-            calledName = expr.getName()
-          }
-
-          if (calledName) {
-            const enclosing = findEnclosingSymbol(callExpr)
-            if (enclosing && enclosing !== calledName) {
-              edges.push({
-                srcName: enclosing,
-                dstName: calledName,
-                kind: "call",
-                srcLine: callExpr.getStartLineNumber()
-              })
+            const target = expr.getExpression()
+            const property = expr.getName()
+            // `this.foo()` resolves to the method declared on the same class.
+            if (Node.isThisExpression(target)) {
+              const className = findEnclosingSymbol(callNode)?.split(".")[0]
+              calledName = className ? `${className}.${property}` : property
+            } else {
+              calledName = property
             }
           }
+
+          if (!calledName) return
+
+          const enclosing = findEnclosingSymbol(callNode)
+          if (!enclosing || enclosing === calledName) return
+
+          edges.push({
+            srcName: enclosing,
+            dstName: importedBinding?.importedName ?? calledName,
+            kind: "call",
+            srcLine: callNode.getStartLineNumber(),
+            ...(importedBinding ? { importPath: importedBinding.specifier } : {})
+          })
+        }
+
+        for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+          pushCallEdge(callExpr, callExpr.getExpression())
+        }
+        for (const newExpr of sourceFile.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+          pushCallEdge(newExpr, newExpr.getExpression())
         }
 
         return {
@@ -352,7 +399,7 @@ export const ParserLive = Layer.succeed(Parser, {
           edges
         }
       },
-      catch: e =>
+      catch: (e) =>
         new ParseError({
           path: filePath,
           message: e instanceof Error ? e.message : String(e),

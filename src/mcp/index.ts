@@ -1,15 +1,15 @@
+import { FileSystem, Path } from "@effect/platform"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
-  ListToolsRequestSchema,
   ErrorCode,
+  ListToolsRequestSchema,
   McpError
 } from "@modelcontextprotocol/sdk/types.js"
-import { Schema, ManagedRuntime, Effect } from "effect"
-import { FileSystem, Path } from "@effect/platform"
-import { IndexStore } from "../services/IndexStore.js"
+import { Effect, type ManagedRuntime, Schema } from "effect"
 import { GraphQuery } from "../services/GraphQuery.js"
+import { IndexStore } from "../services/IndexStore.js"
 
 // Tool Input Schemas
 export const RepoMapInput = Schema.Struct({
@@ -50,7 +50,12 @@ export const ReadFileRangeInput = Schema.Struct({
 })
 export type ReadFileRangeInput = typeof ReadFileRangeInput.Type
 
-export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path | R, any>) => {
+export const createMcpServer = <R>(
+  runtime: ManagedRuntime.ManagedRuntime<
+    IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path | R,
+    unknown
+  >
+) => {
   const server = new Server(
     {
       name: "codegraph-mcp",
@@ -69,18 +74,26 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
       tools: [
         {
           name: "repo_map",
-          description: "Generates a compact, ranked overview of exported signatures across files in the codebase.",
+          description:
+            "Generates a compact, ranked overview of exported signatures across files in the codebase.",
           inputSchema: {
             type: "object",
             properties: {
-              repoId: { type: "string", description: "Optional repo ID (defaults to first indexed repo)" },
-              maxTokens: { type: "number", description: "Estimated token limit for the map (default 2000)" }
+              repoId: {
+                type: "string",
+                description: "Optional repo ID (defaults to first indexed repo)"
+              },
+              maxTokens: {
+                type: "number",
+                description: "Estimated token limit for the map (default 2000)"
+              }
             }
           }
         },
         {
           name: "outline_file",
-          description: "Lists all symbols (functions, classes, interfaces, types) defined in a file in order.",
+          description:
+            "Lists all symbols (functions, classes, interfaces, types) defined in a file in order.",
           inputSchema: {
             type: "object",
             properties: {
@@ -92,7 +105,8 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
         },
         {
           name: "search_symbol",
-          description: "Performs full-text search (FTS5) for symbols by name or signature with in-degree rankings.",
+          description:
+            "Performs full-text search (FTS5) for symbols by name or signature with in-degree rankings.",
           inputSchema: {
             type: "object",
             properties: {
@@ -105,7 +119,8 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
         },
         {
           name: "find_references",
-          description: "Finds all incoming calls, references, and usages of a symbol across the indexed repository.",
+          description:
+            "Finds all incoming calls, references, and usages of a symbol across the indexed repository.",
           inputSchema: {
             type: "object",
             properties: {
@@ -116,7 +131,8 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
         },
         {
           name: "neighborhood",
-          description: "Retrieves the subgraph (callers, callees, extensions) around a symbol up to a given depth.",
+          description:
+            "Retrieves the subgraph (callers, callees, extensions) around a symbol up to a given depth.",
           inputSchema: {
             type: "object",
             properties: {
@@ -145,7 +161,7 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
   })
 
   // Call tool handler
-  server.setRequestHandler(CallToolRequestSchema, async request => {
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: rawArgs } = request.params
 
     const getTargetRepoId = (inputRepoId?: string) =>
@@ -154,9 +170,11 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
         const store = yield* IndexStore
         const repos = yield* store.listRepos()
         if (repos.length === 0) {
-          return yield* Effect.fail(new McpError(ErrorCode.InvalidRequest, "No repositories have been indexed yet."))
+          return yield* Effect.fail(
+            new McpError(ErrorCode.InvalidRequest, "No repositories have been indexed yet.")
+          )
         }
-        return repos[0]!.id
+        return repos[0]?.id ?? ""
       })
 
     try {
@@ -183,7 +201,7 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
             })
           )
           const lines = symbols.map(
-            s => `L${s.startLine}-${s.endLine} [${s.kind}] ${s.signature}`
+            (s) => `L${s.startLine}-${s.endLine} [${s.kind}] ${s.signature}`
           )
           return {
             content: [
@@ -204,7 +222,8 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
             })
           )
           const lines = results.map(
-            s => `${s.name} (${s.kind}) in ${s.filePath}:${s.startLine}\n  ID: ${s.id}\n  In-degree: ${s.inDegree ?? 0}\n  ${s.signature}`
+            (s) =>
+              `${s.name} (${s.kind}) in ${s.filePath}:${s.startLine}\n  ID: ${s.id}\n  In-degree: ${s.inDegree ?? 0}\n  ${s.signature}`
           )
           return {
             content: [
@@ -225,13 +244,17 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
             })
           )
           const lines = references.map(
-            r => `[${r.kind}] from ${r.sourceSymbol.name} (${r.sourceSymbol.kind}) at ${r.sourceSymbol.filePath}:${r.sourceSymbol.startLine}`
+            (r) =>
+              `[${r.kind}] from ${r.sourceSymbol.name} (${r.sourceSymbol.kind}) at ${r.sourceSymbol.filePath}:${r.sourceSymbol.startLine}`
           )
           return {
             content: [
               {
                 type: "text",
-                text: lines.length > 0 ? lines.join("\n") : `No incoming references found for ${args.symbolId}`
+                text:
+                  lines.length > 0
+                    ? lines.join("\n")
+                    : `No incoming references found for ${args.symbolId}`
               }
             ]
           }
@@ -246,10 +269,10 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
             })
           )
           const nodesText = graph.nodes
-            .map(n => `- ${n.name} [${n.kind}] (${n.filePath}:${n.startLine})`)
+            .map((n) => `- ${n.name} [${n.kind}] (${n.filePath}:${n.startLine})`)
             .join("\n")
           const edgesText = graph.edges
-            .map(e => `  ${e.srcSymbolId} --[${e.kind}]--> ${e.dstSymbolId}`)
+            .map((e) => `  ${e.srcSymbolId} --[${e.kind}]--> ${e.dstSymbolId}`)
             .join("\n")
           const output = `Nodes (${graph.nodes.length}):\n${nodesText}\n\nEdges (${graph.edges.length}):\n${edgesText}`
           return { content: [{ type: "text", text: output }] }
@@ -272,7 +295,9 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
                 }
               }
 
-              const exists = yield* fs.exists(resolvedFilePath).pipe(Effect.orElseSucceed(() => false))
+              const exists = yield* fs
+                .exists(resolvedFilePath)
+                .pipe(Effect.orElseSucceed(() => false))
               if (!exists) {
                 return `File not found: ${args.path}`
               }
@@ -292,10 +317,11 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
         default:
           throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof McpError) throw err
+      const message = err instanceof Error ? err.message : String(err)
       return {
-        content: [{ type: "text", text: `Error executing tool ${name}: ${err?.message ?? String(err)}` }],
+        content: [{ type: "text", text: `Error executing tool ${name}: ${message}` }],
         isError: true
       }
     }
@@ -305,7 +331,10 @@ export const createMcpServer = <R>(runtime: ManagedRuntime.ManagedRuntime<IndexS
 }
 
 export const startMcpServer = <R>(
-  runtime: ManagedRuntime.ManagedRuntime<IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path | R, any>
+  runtime: ManagedRuntime.ManagedRuntime<
+    IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path | R,
+    unknown
+  >
 ) => {
   const server = createMcpServer(runtime)
   const transport = new StdioServerTransport()

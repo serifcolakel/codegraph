@@ -1,14 +1,16 @@
-import { Context, Effect, Layer } from "effect"
 import * as SqlClient from "@effect/sql/SqlClient"
-import { StoreError, NotFoundError } from "../domain/errors.js"
+import { Context, Effect, Layer } from "effect"
+import { NotFoundError, StoreError } from "../domain/errors.js"
 import type {
-  SymbolRecord,
-  SymbolWithFile,
-  SymbolDetails,
-  ReferenceResult,
-  NeighborhoodGraph,
+  EdgeKind,
+  EdgeRecord,
   FileGraph,
-  EdgeRecord
+  NeighborhoodGraph,
+  ReferenceResult,
+  SymbolDetails,
+  SymbolKind,
+  SymbolRecord,
+  SymbolWithFile
 } from "../domain/models.js"
 
 export interface GraphQuery {
@@ -18,9 +20,7 @@ export interface GraphQuery {
     repoId?: string
   ) => Effect.Effect<readonly SymbolWithFile[], StoreError>
 
-  readonly getSymbol: (
-    symbolId: string
-  ) => Effect.Effect<SymbolDetails, StoreError | NotFoundError>
+  readonly getSymbol: (symbolId: string) => Effect.Effect<SymbolDetails, StoreError | NotFoundError>
 
   readonly findReferences: (
     symbolId: string
@@ -41,9 +41,7 @@ export interface GraphQuery {
     maxTokens?: number
   ) => Effect.Effect<string, StoreError | NotFoundError>
 
-  readonly fileGraph: (
-    repoId: string
-  ) => Effect.Effect<FileGraph, StoreError | NotFoundError>
+  readonly fileGraph: (repoId: string) => Effect.Effect<FileGraph, StoreError | NotFoundError>
 }
 
 export const GraphQuery = Context.GenericTag<GraphQuery>("@codegraph/GraphQuery")
@@ -59,8 +57,74 @@ export const GraphQueryLive = Layer.effect(
       repoId?: string
     ): Effect.Effect<readonly SymbolWithFile[], StoreError> =>
       Effect.gen(function* () {
-        const cleanQuery = query.trim().replace(/['"*]/g, "")
-        if (!cleanQuery) return []
+        const cleanQuery = query
+          .trim()
+          .replace(/[^\p{L}\p{N}_.]+/gu, " ")
+          .trim()
+
+        // An empty query is used by the UI to seed the symbol-level view:
+        // return the most referenced symbols instead of nothing.
+        if (!cleanQuery) {
+          const rows = yield* (
+            repoId
+              ? sql<{
+                  id: string
+                  name: string
+                  kind: SymbolKind
+                  fileId: string
+                  filePath: string
+                  startLine: number
+                  endLine: number
+                  signature: string
+                  exported: number
+                  inDegree: number
+                }>`
+                  SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
+                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                         (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+                  FROM symbols s
+                  JOIN files f ON s.file_id = f.id
+                  WHERE f.repo_id = ${repoId}
+                  ORDER BY inDegree DESC, s.name ASC
+                  LIMIT ${limit};
+                `
+              : sql<{
+                  id: string
+                  name: string
+                  kind: SymbolKind
+                  fileId: string
+                  filePath: string
+                  startLine: number
+                  endLine: number
+                  signature: string
+                  exported: number
+                  inDegree: number
+                }>`
+                  SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
+                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                         (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+                  FROM symbols s
+                  JOIN files f ON s.file_id = f.id
+                  ORDER BY inDegree DESC, s.name ASC
+                  LIMIT ${limit};
+                `
+          ).pipe(
+            Effect.mapError((e) => new StoreError({ message: "Failed to list symbols", cause: e }))
+          )
+
+          return rows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            kind: r.kind,
+            fileId: r.fileId,
+            filePath: r.filePath,
+            startLine: r.startLine,
+            endLine: r.endLine,
+            signature: r.signature,
+            exported: r.exported === 1,
+            inDegree: r.inDegree
+          }))
+        }
 
         const ftsMatch = `${cleanQuery}*`
 
@@ -70,7 +134,7 @@ export const GraphQueryLive = Layer.effect(
             ? sql<{
                 id: string
                 name: string
-                kind: any
+                kind: SymbolKind
                 fileId: string
                 filePath: string
                 startLine: number
@@ -92,7 +156,7 @@ export const GraphQueryLive = Layer.effect(
             : sql<{
                 id: string
                 name: string
-                kind: any
+                kind: SymbolKind
                 fileId: string
                 filePath: string
                 startLine: number
@@ -118,7 +182,7 @@ export const GraphQueryLive = Layer.effect(
               ? sql<{
                   id: string
                   name: string
-                  kind: any
+                  kind: SymbolKind
                   fileId: string
                   filePath: string
                   startLine: number
@@ -138,7 +202,7 @@ export const GraphQueryLive = Layer.effect(
               : sql<{
                   id: string
                   name: string
-                  kind: any
+                  kind: SymbolKind
                   fileId: string
                   filePath: string
                   startLine: number
@@ -156,10 +220,12 @@ export const GraphQueryLive = Layer.effect(
                   LIMIT ${limit};
                 `
           ),
-          Effect.mapError(e => new StoreError({ message: "Search symbols query failed", cause: e }))
+          Effect.mapError(
+            (e) => new StoreError({ message: "Search symbols query failed", cause: e })
+          )
         )
 
-        return ftsResults.map(r => ({
+        return ftsResults.map((r) => ({
           id: r.id,
           name: r.name,
           kind: r.kind,
@@ -180,7 +246,7 @@ export const GraphQueryLive = Layer.effect(
         const rows = yield* sql<{
           id: string
           name: string
-          kind: any
+          kind: SymbolKind
           fileId: string
           filePath: string
           startLine: number
@@ -196,7 +262,9 @@ export const GraphQueryLive = Layer.effect(
           JOIN files f ON s.file_id = f.id
           WHERE s.id = ${symbolId}
           LIMIT 1;
-        `.pipe(Effect.mapError(e => new StoreError({ message: "Failed to get symbol", cause: e })))
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Failed to get symbol", cause: e }))
+        )
 
         const sym = rows[0]
         if (!sym) {
@@ -207,9 +275,9 @@ export const GraphQueryLive = Layer.effect(
           id: string
           src_symbol_id: string
           dst_symbol_id: string
-          kind: any
+          kind: EdgeKind
           targetName?: string
-          targetKind?: any
+          targetKind: SymbolKind
           targetFileId?: string
           targetFilePath?: string
           targetStartLine?: number
@@ -226,15 +294,19 @@ export const GraphQueryLive = Layer.effect(
           LEFT JOIN symbols ts ON e.dst_symbol_id = ts.id
           LEFT JOIN files tf ON ts.file_id = tf.id
           WHERE e.src_symbol_id = ${symbolId};
-        `.pipe(Effect.mapError(e => new StoreError({ message: "Failed to get outgoing edges", cause: e })))
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to get outgoing edges", cause: e })
+          )
+        )
 
         const incoming = yield* sql<{
           id: string
           src_symbol_id: string
           dst_symbol_id: string
-          kind: any
+          kind: EdgeKind
           sourceName?: string
-          sourceKind?: any
+          sourceKind: SymbolKind
           sourceFileId?: string
           sourceFilePath?: string
           sourceStartLine?: number
@@ -251,7 +323,11 @@ export const GraphQueryLive = Layer.effect(
           LEFT JOIN symbols ss ON e.src_symbol_id = ss.id
           LEFT JOIN files sf ON ss.file_id = sf.id
           WHERE e.dst_symbol_id = ${symbolId};
-        `.pipe(Effect.mapError(e => new StoreError({ message: "Failed to get incoming edges", cause: e })))
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to get incoming edges", cause: e })
+          )
+        )
 
         return {
           symbol: {
@@ -266,7 +342,7 @@ export const GraphQueryLive = Layer.effect(
             exported: sym.exported === 1,
             inDegree: sym.inDegree
           },
-          outgoingEdges: outgoing.map(e => ({
+          outgoingEdges: outgoing.map((e) => ({
             id: e.id,
             srcSymbolId: e.src_symbol_id,
             dstSymbolId: e.dst_symbol_id,
@@ -276,16 +352,16 @@ export const GraphQueryLive = Layer.effect(
                   id: e.dst_symbol_id,
                   name: e.targetName,
                   kind: e.targetKind,
-                  fileId: e.targetFileId!,
-                  filePath: e.targetFilePath!,
-                  startLine: e.targetStartLine!,
-                  endLine: e.targetEndLine!,
-                  signature: e.targetSignature!,
+                  fileId: e.targetFileId ?? "",
+                  filePath: e.targetFilePath ?? "",
+                  startLine: e.targetStartLine ?? 0,
+                  endLine: e.targetEndLine ?? 0,
+                  signature: e.targetSignature ?? "",
                   exported: e.targetExported === 1
                 }
               : undefined
           })),
-          incomingEdges: incoming.map(e => ({
+          incomingEdges: incoming.map((e) => ({
             id: e.id,
             srcSymbolId: e.src_symbol_id,
             dstSymbolId: e.dst_symbol_id,
@@ -295,11 +371,11 @@ export const GraphQueryLive = Layer.effect(
                   id: e.src_symbol_id,
                   name: e.sourceName,
                   kind: e.sourceKind,
-                  fileId: e.sourceFileId!,
-                  filePath: e.sourceFilePath!,
-                  startLine: e.sourceStartLine!,
-                  endLine: e.sourceEndLine!,
-                  signature: e.sourceSignature!,
+                  fileId: e.sourceFileId ?? "",
+                  filePath: e.sourceFilePath ?? "",
+                  startLine: e.sourceStartLine ?? 0,
+                  endLine: e.sourceEndLine ?? 0,
+                  signature: e.sourceSignature ?? "",
                   exported: e.sourceExported === 1
                 }
               : undefined
@@ -313,10 +389,10 @@ export const GraphQueryLive = Layer.effect(
       Effect.gen(function* () {
         const rows = yield* sql<{
           edgeId: string
-          kind: any
+          kind: EdgeKind
           sourceId: string
           sourceName: string
-          sourceKind: any
+          sourceKind: SymbolKind
           sourceFileId: string
           sourceFilePath: string
           sourceStartLine: number
@@ -333,9 +409,13 @@ export const GraphQueryLive = Layer.effect(
           JOIN symbols s ON e.src_symbol_id = s.id
           JOIN files f ON s.file_id = f.id
           WHERE e.dst_symbol_id = ${symbolId};
-        `.pipe(Effect.mapError(e => new StoreError({ message: "Find references query failed", cause: e })))
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Find references query failed", cause: e })
+          )
+        )
 
-        return rows.map(r => ({
+        return rows.map((r) => ({
           edgeId: r.edgeId,
           kind: r.kind,
           sourceSymbol: {
@@ -357,19 +437,22 @@ export const GraphQueryLive = Layer.effect(
       filePath: string
     ): Effect.Effect<readonly SymbolRecord[], StoreError | NotFoundError> =>
       Effect.gen(function* () {
-        const rows = yield* sql<SymbolRecord>`
+        const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\.\//, "")
+        const rows = yield* sql<Omit<SymbolRecord, "exported"> & { exported: number }>`
           SELECT s.id, s.name, s.kind, s.file_id as fileId,
                  s.start_line as startLine, s.end_line as endLine,
-                 s.signature, (s.exported = 1) as exported
+                 s.signature, s.exported as exported
           FROM symbols s
           JOIN files f ON s.file_id = f.id
           JOIN repos r ON f.repo_id = r.id
-          WHERE (f.path = ${filePath} OR f.path LIKE ${`%${filePath}`})
+          WHERE (f.path = ${normalizedPath} OR f.path LIKE ${`%/${normalizedPath}`})
             AND (r.id = ${repoIdOrPath} OR r.root_path = ${repoIdOrPath})
           ORDER BY s.start_line ASC;
-        `.pipe(Effect.mapError(e => new StoreError({ message: "Outline file query failed", cause: e })))
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Outline file query failed", cause: e }))
+        )
 
-        return rows
+        return rows.map((row) => ({ ...row, exported: row.exported === 1 }))
       })
 
     const neighborhood = (
@@ -377,12 +460,24 @@ export const GraphQueryLive = Layer.effect(
       depth: number = 1
     ): Effect.Effect<NeighborhoodGraph, StoreError | NotFoundError> =>
       Effect.gen(function* () {
+        const root = yield* sql<{ id: string }>`
+          SELECT id FROM symbols WHERE id = ${symbolId} LIMIT 1;
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Failed to look up symbol", cause: e }))
+        )
+
+        if (root.length === 0) {
+          return yield* Effect.fail(new NotFoundError({ entity: "Symbol", id: symbolId }))
+        }
+
+        const safeDepth = Math.max(0, Math.min(5, Math.floor(depth)))
+
         // BFS to collect nodes and edges up to depth
         let currentFrontier = new Set<string>([symbolId])
         const visitedNodes = new Set<string>([symbolId])
         const collectedEdges = new Map<string, EdgeRecord>()
 
-        for (let d = 0; d < depth; d++) {
+        for (let d = 0; d < safeDepth; d++) {
           if (currentFrontier.size === 0) break
           const frontierArray = Array.from(currentFrontier)
 
@@ -391,16 +486,28 @@ export const GraphQueryLive = Layer.effect(
             SELECT id, src_symbol_id as srcSymbolId, dst_symbol_id as dstSymbolId, kind
             FROM edges
             WHERE src_symbol_id IN ${sql.in(frontierArray)} OR dst_symbol_id IN ${sql.in(frontierArray)};
-          `.pipe(Effect.mapError(e => new StoreError({ message: "Neighborhood edges query failed", cause: e })))
+          `.pipe(
+            Effect.mapError(
+              (e) => new StoreError({ message: "Neighborhood edges query failed", cause: e })
+            )
+          )
 
           const nextFrontier = new Set<string>()
           for (const edge of edges) {
             collectedEdges.set(edge.id, edge)
-            if (!visitedNodes.has(edge.srcSymbolId) && !edge.srcSymbolId.startsWith("module:") && !edge.srcSymbolId.startsWith("symbol:")) {
+            if (
+              !visitedNodes.has(edge.srcSymbolId) &&
+              !edge.srcSymbolId.startsWith("module:") &&
+              !edge.srcSymbolId.startsWith("symbol:")
+            ) {
               visitedNodes.add(edge.srcSymbolId)
               nextFrontier.add(edge.srcSymbolId)
             }
-            if (!visitedNodes.has(edge.dstSymbolId) && !edge.dstSymbolId.startsWith("module:") && !edge.dstSymbolId.startsWith("symbol:")) {
+            if (
+              !visitedNodes.has(edge.dstSymbolId) &&
+              !edge.dstSymbolId.startsWith("module:") &&
+              !edge.dstSymbolId.startsWith("symbol:")
+            ) {
               visitedNodes.add(edge.dstSymbolId)
               nextFrontier.add(edge.dstSymbolId)
             }
@@ -416,7 +523,7 @@ export const GraphQueryLive = Layer.effect(
         const nodes = yield* sql<{
           id: string
           name: string
-          kind: any
+          kind: SymbolKind
           fileId: string
           filePath: string
           startLine: number
@@ -431,10 +538,14 @@ export const GraphQueryLive = Layer.effect(
           FROM symbols s
           JOIN files f ON s.file_id = f.id
           WHERE s.id IN ${sql.in(nodeIds)};
-        `.pipe(Effect.mapError(e => new StoreError({ message: "Failed to fetch neighborhood nodes", cause: e })))
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to fetch neighborhood nodes", cause: e })
+          )
+        )
 
         return {
-          nodes: nodes.map(n => ({
+          nodes: nodes.map((n) => ({
             id: n.id,
             name: n.name,
             kind: n.kind,
@@ -458,7 +569,7 @@ export const GraphQueryLive = Layer.effect(
         const symbols = yield* sql<{
           id: string
           name: string
-          kind: any
+          kind: SymbolKind
           signature: string
           startLine: number
           filePath: string
@@ -471,7 +582,9 @@ export const GraphQueryLive = Layer.effect(
           JOIN files f ON s.file_id = f.id
           WHERE f.repo_id = ${repoId} AND s.exported = 1
           ORDER BY inDegree DESC, s.start_line ASC;
-        `.pipe(Effect.mapError(e => new StoreError({ message: "Repo map query failed", cause: e })))
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Repo map query failed", cause: e }))
+        )
 
         if (symbols.length === 0) {
           return "# Repository has no exported symbols indexed yet."
@@ -516,9 +629,7 @@ export const GraphQueryLive = Layer.effect(
         return lines.join("\n\n")
       })
 
-    const fileGraph = (
-      repoId: string
-    ): Effect.Effect<FileGraph, StoreError | NotFoundError> =>
+    const fileGraph = (repoId: string): Effect.Effect<FileGraph, StoreError | NotFoundError> =>
       Effect.gen(function* () {
         const fileRows = yield* sql<{
           id: string
@@ -537,7 +648,11 @@ export const GraphQueryLive = Layer.effect(
           LEFT JOIN symbols s ON s.file_id = f.id
           WHERE f.repo_id = ${repoId}
           GROUP BY f.id, f.path;
-        `.pipe(Effect.mapError(e => new StoreError({ message: "File graph nodes query failed", cause: e })))
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "File graph nodes query failed", cause: e })
+          )
+        )
 
         const edgeRows = yield* sql<{
           srcFileId: string
@@ -558,16 +673,20 @@ export const GraphQueryLive = Layer.effect(
           JOIN files df ON dst_s.file_id = df.id
           WHERE sf.repo_id = ${repoId} AND df.repo_id = ${repoId} AND sf.id != df.id
           GROUP BY sf.id, df.id;
-        `.pipe(Effect.mapError(e => new StoreError({ message: "File graph edges query failed", cause: e })))
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "File graph edges query failed", cause: e })
+          )
+        )
 
         return {
-          nodes: fileRows.map(r => ({
+          nodes: fileRows.map((r) => ({
             id: r.id,
             path: r.path,
             symbolCount: r.symbolCount,
             inDegree: r.inDegree
           })),
-          edges: edgeRows.map(r => ({
+          edges: edgeRows.map((r) => ({
             srcFileId: r.srcFileId,
             srcPath: r.srcPath,
             dstFileId: r.dstFileId,
