@@ -1,0 +1,35 @@
+{
+  "name": "codegraph",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "codegraph": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "codegraph": "bun run src/cli/index.ts"
+  },
+  "dependencies": {
+    "@effect/cli": "0.77.2",
+    "@effect/platform": "0.97.4",
+    "@effect/platform-node": "0.108.4",
+    "@effect/sql": "0.52.2",
+    "@effect/sql-sqlite-node": "0.54.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "better-sqlite3": "^13.0.3",
+    "effect": "3.22.5",
+    "ignore": "^7.0.5",
+    "ts-morph": "^28.0.0"
+  },
+  "devDependencies": {
+    "@effect/vitest": "0.30.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.9",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "trustedDependencies": [
+    "@parcel/watcher"
+  ]
+}
