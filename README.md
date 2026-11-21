@@ -8,12 +8,17 @@ MCP server.
 ## Features
 
 - Incremental indexing: files are hashed and only changed files are re-parsed.
+- Multi-language parsing: TypeScript/JavaScript, C#, Go, Rust, Python, Java,
+  Kotlin, Swift, C/C++, Ruby, PHP and Scala.
 - Symbol graph: files, symbols (functions, classes, interfaces, types, enums,
   methods, properties, consts) and edges (import, call, reference, extends,
   implements, contains).
+- Documentation indexing: JSDoc, `///` / `/** */` block docs and Python
+  docstrings are stored with symbols and included in full-text search.
 - Module-aware cross-file edge resolution with ambiguity protection.
 - FTS5 symbol search plus a ranked repository map.
-- Static HTML/Cytoscape.js visualization (no frontend build step).
+- Static HTML/Cytoscape.js visualization (no frontend build step) with dark and
+  light themes, deep links, callers/callees, type filters and view history.
 - HTTP JSON API and an MCP stdio server.
 - Optional watch mode that re-indexes on change (debounced).
 
@@ -73,15 +78,21 @@ configured ignore globs.
 
 ## HTTP API
 
-| Endpoint                                        | Description                         |
-| ----------------------------------------------- | ----------------------------------- |
-| `GET /api/repos`                                | Indexed repositories                |
-| `GET /api/graph?repo=&level=file`               | File-level import/call graph        |
-| `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)     |
-| `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                 |
-| `GET /api/search?q=&repo=`                      | FTS symbol search                   |
-| `GET /api/symbol/:id`                           | Symbol details, callers and callees |
-| `GET /`                                         | Single-page graph UI                |
+| Endpoint                                        | Description                                |
+| ----------------------------------------------- | ------------------------------------------ |
+| `GET /api/repos`                                | Indexed repositories                       |
+| `GET /api/graph?repo=&level=file`               | File-level import/call graph               |
+| `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)            |
+| `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                        |
+| `GET /api/search?q=&repo=`                      | FTS symbol search                          |
+| `GET /api/symbol/:id`                           | Symbol details, callers and callees        |
+| `POST /api/index`                               | Index a folder (`{ path, name?, force? }`) |
+| `POST /api/reindex`                             | Refresh a repo (`{ repoId, force? }`)      |
+| `GET /`                                         | Single-page graph UI                       |
+
+The web UI has **Index a repository** and **Re-index current repository** actions,
+so a new folder can be indexed without restarting the server. The index request
+runs against the same `CODEGRAPH_DB_PATH` as the server.
 
 ## MCP server
 
@@ -89,41 +100,90 @@ The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `find_references`, `neighborhood`, and `read_file_range`. Inputs are validated
 with Effect `Schema`, and results are compact text with `file:line` references.
 
-### Claude Code / Claude Desktop
+### 1. Index the repository
+
+The MCP server reads a SQLite file, so index once with the same
+`CODEGRAPH_DB_PATH` you will give the client:
+
+```bash
+CODEGRAPH_DB_PATH="$HOME/.codegraph/my-repo.sqlite" \
+  node /absolute/path/to/codegraph/dist/cli/index.js index /path/to/my-repo --force
+```
+
+### 2. Register the server
+
+#### Claude Code / Claude Desktop
 
 ```json
 {
   "mcpServers": {
-    "codegraph": {
+    "codegraph-my-repo": {
       "command": "node",
       "args": ["/absolute/path/to/codegraph/dist/cli/index.js", "mcp"],
       "env": {
-        "CODEGRAPH_DB_PATH": "/absolute/path/to/.codegraph.sqlite"
+        "CODEGRAPH_DB_PATH": "/Users/you/.codegraph/my-repo.sqlite"
       }
     }
   }
 }
 ```
 
-### VS Code (`.vscode/mcp.json`)
+#### Claude Code CLI
+
+```bash
+claude mcp add codegraph-my-repo \
+  --env CODEGRAPH_DB_PATH=/Users/you/.codegraph/my-repo.sqlite \
+  -- node /absolute/path/to/codegraph/dist/cli/index.js mcp
+```
+
+#### VS Code (`.vscode/mcp.json`)
 
 ```json
 {
   "servers": {
-    "codegraph": {
+    "codegraph-my-repo": {
       "type": "stdio",
       "command": "node",
       "args": ["/absolute/path/to/codegraph/dist/cli/index.js", "mcp"],
       "env": {
-        "CODEGRAPH_DB_PATH": "/absolute/path/to/.codegraph.sqlite"
+        "CODEGRAPH_DB_PATH": "/Users/you/.codegraph/my-repo.sqlite"
       }
     }
   }
 }
 ```
 
-Index the repository once with the same `CODEGRAPH_DB_PATH` before starting the
-MCP server.
+#### opencode (`opencode.json` or `opencode.jsonc`)
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "codegraph-my-repo": {
+        "type": "local",
+        "command": ["node", "/absolute/path/to/codegraph/dist/cli/index.js", "mcp"],
+        "environment": {
+          "CODEGRAPH_DB_PATH": "/Users/you/.codegraph/my-repo.sqlite"
+        }
+      }
+    }
+  }
+}
+```
+
+Or let opencode write it:
+
+```bash
+opencode mcp add codegraph-my-repo \
+  --env CODEGRAPH_DB_PATH=/Users/you/.codegraph/my-repo.sqlite \
+  -- node /absolute/path/to/codegraph/dist/cli/index.js mcp
+```
+
+Use one server entry per database if you index several repositories (for example
+`codegraph-my-repo` and `codegraph-self`). The CLI resolves `web/index.html`
+relative to its own package, so neither `serve` nor `mcp` depends on the
+current working directory.
 
 ## Project layout
 

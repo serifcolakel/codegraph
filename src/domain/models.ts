@@ -45,7 +45,8 @@ export const SymbolRecord = Schema.Struct({
   startLine: Schema.Number,
   endLine: Schema.Number,
   signature: Schema.String,
-  exported: Schema.Boolean
+  exported: Schema.Boolean,
+  doc: Schema.optional(Schema.String)
 })
 export type SymbolRecord = typeof SymbolRecord.Type
 
@@ -64,6 +65,7 @@ export const ParsedSymbol = Schema.Struct({
   endLine: Schema.Number,
   signature: Schema.String,
   exported: Schema.Boolean,
+  doc: Schema.optional(Schema.String),
   containerName: Schema.optional(Schema.String)
 })
 export type ParsedSymbol = typeof ParsedSymbol.Type
@@ -122,6 +124,7 @@ export const SymbolWithFile = Schema.Struct({
   endLine: Schema.Number,
   signature: Schema.String,
   exported: Schema.Boolean,
+  doc: Schema.optional(Schema.String),
   inDegree: Schema.optional(Schema.Number)
 })
 export type SymbolWithFile = typeof SymbolWithFile.Type
@@ -158,7 +161,8 @@ export type ReferenceResult = typeof ReferenceResult.Type
 
 export const NeighborhoodGraph = Schema.Struct({
   nodes: Schema.Array(SymbolWithFile),
-  edges: Schema.Array(EdgeRecord)
+  edges: Schema.Array(EdgeRecord),
+  truncated: Schema.optional(Schema.Boolean)
 })
 export type NeighborhoodGraph = typeof NeighborhoodGraph.Type
 

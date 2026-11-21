@@ -32,6 +32,7 @@ export interface Operation {
   compute(a: number, b: number): number;
 }
 
+/** Adds two numbers together. */
 export class AddOperation implements Operation {
   compute(a: number, b: number): number {
     return a + b;
@@ -60,6 +61,10 @@ export function runCalculation(x: number, y: number): number {
         const searchResults = yield* query.searchSymbols("AddOperation")
         expect(searchResults.length).toBeGreaterThan(0)
         expect(searchResults[0]?.name).toBe("AddOperation")
+        expect(searchResults[0]?.doc).toContain("Adds two numbers")
+
+        const docResults = yield* query.searchSymbols("numbers", 10, report.repoId)
+        expect(docResults.some((s) => s.name === "AddOperation")).toBe(true)
 
         // Empty query seeds the symbol-level view with ranked symbols
         const seeded = yield* query.searchSymbols("", 10, report.repoId)
@@ -82,6 +87,15 @@ export function runCalculation(x: number, y: number): number {
         // 5. Test neighborhood
         const neighborhood = yield* query.neighborhood(addOpSymbol.id, 2)
         expect(neighborhood.nodes.length).toBeGreaterThan(0)
+        const nodeIds = new Set(neighborhood.nodes.map((node) => node.id))
+        expect(
+          neighborhood.edges.every(
+            (edge) => nodeIds.has(edge.srcSymbolId) && nodeIds.has(edge.dstSymbolId)
+          )
+        ).toBe(true)
+
+        const deep = yield* query.neighborhood(addOpSymbol.id, 100)
+        expect(deep.nodes.length).toBeLessThanOrEqual(500)
 
         const missing = yield* query.neighborhood("does-not-exist").pipe(Effect.flip)
         expect(missing._tag).toBe("NotFoundError")

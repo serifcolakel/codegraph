@@ -77,10 +77,11 @@ export const GraphQueryLive = Layer.effect(
                   endLine: number
                   signature: string
                   exported: number
+                  doc: string
                   inDegree: number
                 }>`
                   SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                          (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
                   FROM symbols s
                   JOIN files f ON s.file_id = f.id
@@ -98,10 +99,11 @@ export const GraphQueryLive = Layer.effect(
                   endLine: number
                   signature: string
                   exported: number
+                  doc: string
                   inDegree: number
                 }>`
                   SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                          (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
                   FROM symbols s
                   JOIN files f ON s.file_id = f.id
@@ -121,6 +123,7 @@ export const GraphQueryLive = Layer.effect(
             startLine: r.startLine,
             endLine: r.endLine,
             signature: r.signature,
+            doc: r.doc,
             exported: r.exported === 1,
             inDegree: r.inDegree
           }))
@@ -141,10 +144,11 @@ export const GraphQueryLive = Layer.effect(
                 endLine: number
                 signature: string
                 exported: number
+                doc: string
                 inDegree: number
               }>`
                 SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                       s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                       s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                        (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
                 FROM symbols_fts fts
                 JOIN symbols s ON fts.symbol_id = s.id
@@ -163,10 +167,11 @@ export const GraphQueryLive = Layer.effect(
                 endLine: number
                 signature: string
                 exported: number
+                doc: string
                 inDegree: number
               }>`
                 SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                       s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                       s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                        (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
                 FROM symbols_fts fts
                 JOIN symbols s ON fts.symbol_id = s.id
@@ -189,14 +194,15 @@ export const GraphQueryLive = Layer.effect(
                   endLine: number
                   signature: string
                   exported: number
+                  doc: string
                   inDegree: number
                 }>`
                   SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                          (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
                   FROM symbols s
                   JOIN files f ON s.file_id = f.id
-                  WHERE f.repo_id = ${repoId} AND (s.name LIKE ${`%${cleanQuery}%`} OR s.signature LIKE ${`%${cleanQuery}%`})
+                  WHERE f.repo_id = ${repoId} AND (s.name LIKE ${`%${cleanQuery}%`} OR s.signature LIKE ${`%${cleanQuery}%`} OR s.doc LIKE ${`%${cleanQuery}%`})
                   LIMIT ${limit};
                 `
               : sql<{
@@ -209,14 +215,15 @@ export const GraphQueryLive = Layer.effect(
                   endLine: number
                   signature: string
                   exported: number
+                  doc: string
                   inDegree: number
                 }>`
                   SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                         s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                          (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
                   FROM symbols s
                   JOIN files f ON s.file_id = f.id
-                  WHERE s.name LIKE ${`%${cleanQuery}%`} OR s.signature LIKE ${`%${cleanQuery}%`}
+                  WHERE s.name LIKE ${`%${cleanQuery}%`} OR s.signature LIKE ${`%${cleanQuery}%`} OR s.doc LIKE ${`%${cleanQuery}%`}
                   LIMIT ${limit};
                 `
           ),
@@ -234,6 +241,7 @@ export const GraphQueryLive = Layer.effect(
           startLine: r.startLine,
           endLine: r.endLine,
           signature: r.signature,
+          doc: r.doc,
           exported: r.exported === 1,
           inDegree: r.inDegree
         }))
@@ -253,10 +261,11 @@ export const GraphQueryLive = Layer.effect(
           endLine: number
           signature: string
           exported: number
+          doc: string
           inDegree: number
         }>`
           SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                 s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                 s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                  (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
           FROM symbols s
           JOIN files f ON s.file_id = f.id
@@ -284,11 +293,12 @@ export const GraphQueryLive = Layer.effect(
           targetEndLine?: number
           targetSignature?: string
           targetExported?: number
+          targetDoc?: string
         }>`
           SELECT e.id, e.src_symbol_id, e.dst_symbol_id, e.kind,
                  ts.name as targetName, ts.kind as targetKind, ts.file_id as targetFileId,
                  tf.path as targetFilePath, ts.start_line as targetStartLine,
-                 ts.end_line as targetEndLine, ts.signature as targetSignature,
+                 ts.end_line as targetEndLine, ts.signature as targetSignature, ts.doc as targetDoc,
                  ts.exported as targetExported
           FROM edges e
           LEFT JOIN symbols ts ON e.dst_symbol_id = ts.id
@@ -313,11 +323,12 @@ export const GraphQueryLive = Layer.effect(
           sourceEndLine?: number
           sourceSignature?: string
           sourceExported?: number
+          sourceDoc?: string
         }>`
           SELECT e.id, e.src_symbol_id, e.dst_symbol_id, e.kind,
                  ss.name as sourceName, ss.kind as sourceKind, ss.file_id as sourceFileId,
                  sf.path as sourceFilePath, ss.start_line as sourceStartLine,
-                 ss.end_line as sourceEndLine, ss.signature as sourceSignature,
+                 ss.end_line as sourceEndLine, ss.signature as sourceSignature, ss.doc as sourceDoc,
                  ss.exported as sourceExported
           FROM edges e
           LEFT JOIN symbols ss ON e.src_symbol_id = ss.id
@@ -339,6 +350,7 @@ export const GraphQueryLive = Layer.effect(
             startLine: sym.startLine,
             endLine: sym.endLine,
             signature: sym.signature,
+            doc: sym.doc,
             exported: sym.exported === 1,
             inDegree: sym.inDegree
           },
@@ -357,6 +369,7 @@ export const GraphQueryLive = Layer.effect(
                   startLine: e.targetStartLine ?? 0,
                   endLine: e.targetEndLine ?? 0,
                   signature: e.targetSignature ?? "",
+                  doc: e.targetDoc ?? "",
                   exported: e.targetExported === 1
                 }
               : undefined
@@ -376,6 +389,7 @@ export const GraphQueryLive = Layer.effect(
                   startLine: e.sourceStartLine ?? 0,
                   endLine: e.sourceEndLine ?? 0,
                   signature: e.sourceSignature ?? "",
+                  doc: e.sourceDoc ?? "",
                   exported: e.sourceExported === 1
                 }
               : undefined
@@ -399,12 +413,13 @@ export const GraphQueryLive = Layer.effect(
           sourceEndLine: number
           sourceSignature: string
           sourceExported: number
+          sourceDoc: string
         }>`
           SELECT e.id as edgeId, e.kind,
                  s.id as sourceId, s.name as sourceName, s.kind as sourceKind,
                  s.file_id as sourceFileId, f.path as sourceFilePath,
                  s.start_line as sourceStartLine, s.end_line as sourceEndLine,
-                 s.signature as sourceSignature, s.exported as sourceExported
+                 s.signature as sourceSignature, s.exported as sourceExported, s.doc as sourceDoc
           FROM edges e
           JOIN symbols s ON e.src_symbol_id = s.id
           JOIN files f ON s.file_id = f.id
@@ -427,6 +442,7 @@ export const GraphQueryLive = Layer.effect(
             startLine: r.sourceStartLine,
             endLine: r.sourceEndLine,
             signature: r.sourceSignature,
+            doc: r.sourceDoc,
             exported: r.sourceExported === 1
           }
         }))
@@ -441,7 +457,7 @@ export const GraphQueryLive = Layer.effect(
         const rows = yield* sql<Omit<SymbolRecord, "exported"> & { exported: number }>`
           SELECT s.id, s.name, s.kind, s.file_id as fileId,
                  s.start_line as startLine, s.end_line as endLine,
-                 s.signature, s.exported as exported
+                 s.signature, s.exported as exported, s.doc
           FROM symbols s
           JOIN files f ON s.file_id = f.id
           JOIN repos r ON f.repo_id = r.id
@@ -470,12 +486,15 @@ export const GraphQueryLive = Layer.effect(
           return yield* Effect.fail(new NotFoundError({ entity: "Symbol", id: symbolId }))
         }
 
-        const safeDepth = Math.max(0, Math.min(5, Math.floor(depth)))
+        const MAX_NEIGHBORHOOD_DEPTH = 8
+        const MAX_NEIGHBORHOOD_NODES = 500
+        const safeDepth = Math.max(0, Math.min(MAX_NEIGHBORHOOD_DEPTH, Math.floor(depth)))
 
         // BFS to collect nodes and edges up to depth
         let currentFrontier = new Set<string>([symbolId])
         const visitedNodes = new Set<string>([symbolId])
         const collectedEdges = new Map<string, EdgeRecord>()
+        let truncated = false
 
         for (let d = 0; d < safeDepth; d++) {
           if (currentFrontier.size === 0) break
@@ -500,16 +519,24 @@ export const GraphQueryLive = Layer.effect(
               !edge.srcSymbolId.startsWith("module:") &&
               !edge.srcSymbolId.startsWith("symbol:")
             ) {
-              visitedNodes.add(edge.srcSymbolId)
-              nextFrontier.add(edge.srcSymbolId)
+              if (visitedNodes.size >= MAX_NEIGHBORHOOD_NODES) {
+                truncated = true
+              } else {
+                visitedNodes.add(edge.srcSymbolId)
+                nextFrontier.add(edge.srcSymbolId)
+              }
             }
             if (
               !visitedNodes.has(edge.dstSymbolId) &&
               !edge.dstSymbolId.startsWith("module:") &&
               !edge.dstSymbolId.startsWith("symbol:")
             ) {
-              visitedNodes.add(edge.dstSymbolId)
-              nextFrontier.add(edge.dstSymbolId)
+              if (visitedNodes.size >= MAX_NEIGHBORHOOD_NODES) {
+                truncated = true
+              } else {
+                visitedNodes.add(edge.dstSymbolId)
+                nextFrontier.add(edge.dstSymbolId)
+              }
             }
           }
           currentFrontier = nextFrontier
@@ -530,10 +557,11 @@ export const GraphQueryLive = Layer.effect(
           endLine: number
           signature: string
           exported: number
+          doc: string
           inDegree: number
         }>`
           SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
-                 s.start_line as startLine, s.end_line as endLine, s.signature, s.exported,
+                 s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
                  (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
           FROM symbols s
           JOIN files f ON s.file_id = f.id
@@ -554,10 +582,15 @@ export const GraphQueryLive = Layer.effect(
             startLine: n.startLine,
             endLine: n.endLine,
             signature: n.signature,
+            doc: n.doc,
             exported: n.exported === 1,
             inDegree: n.inDegree
           })),
-          edges: Array.from(collectedEdges.values())
+          // Only return edges whose endpoints are part of the returned graph.
+          edges: Array.from(collectedEdges.values()).filter(
+            (edge) => visitedNodes.has(edge.srcSymbolId) && visitedNodes.has(edge.dstSymbolId)
+          ),
+          ...(truncated ? { truncated: true } : {})
         }
       })
 

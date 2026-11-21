@@ -1,7 +1,9 @@
 import { Context, Effect, Layer } from "effect"
-import { Node, Project, SyntaxKind } from "ts-morph"
+import { type ArrowFunction, type FunctionExpression, Node, Project, SyntaxKind } from "ts-morph"
 import { ParseError } from "../domain/errors.js"
+import { isTypeScriptLanguage, languageForPath } from "../domain/languages.js"
 import type { ParsedEdge, ParsedFile, ParsedSymbol, SymbolKind } from "../domain/models.js"
+import { parseGenericFile } from "./GenericParser.js"
 
 export interface Parser {
   readonly parse: (filePath: string, content: string) => Effect.Effect<ParsedFile, ParseError>
@@ -9,21 +11,83 @@ export interface Parser {
 
 export const Parser = Context.GenericTag<Parser>("@codegraph/Parser")
 
-const MAX_SIGNATURE_LENGTH = 200
+const MAX_SIGNATURE_LENGTH = 400
 
-const getHeaderSignature = (text: string): string => {
-  const braceIdx = text.indexOf("{")
-  const header = braceIdx === -1 ? text : text.slice(0, braceIdx)
-  const normalized = header.replace(/\s+/g, " ").trim()
+const normalizeSignature = (text: string): string => {
+  const normalized = text.replace(/\s+/g, " ").trim()
   return normalized.length > MAX_SIGNATURE_LENGTH
     ? `${normalized.slice(0, MAX_SIGNATURE_LENGTH - 3)}...`
     : normalized
 }
 
+// Returns the declaration text up to the real body node. Splitting on the
+// first "{" would cut inside parameter object types such as
+// `params: { fundType: FundType }`.
+const getSignatureBeforeBody = (node: Node, body: Node | undefined): string => {
+  const start = node.getStart()
+  const end = body ? body.getStart() : node.getEnd()
+  return normalizeSignature(node.getText().slice(0, Math.max(0, end - start)))
+}
+
+const getHeaderSignature = (text: string): string => {
+  const braceIdx = text.indexOf("{")
+  const header = braceIdx === -1 ? text : text.slice(0, braceIdx)
+  return normalizeSignature(header)
+}
+
+type DocComment = {
+  getCommentText(): string | undefined
+  getTags(): ReadonlyArray<{ getText(): string }>
+}
+
+type DocNode = {
+  getJsDocs(): ReadonlyArray<DocComment>
+}
+
+const getDocText = (node: DocNode): string =>
+  node
+    .getJsDocs()
+    .map((doc) => {
+      const parts: string[] = []
+      const description = doc.getCommentText()?.trim()
+      if (description) parts.push(description)
+      for (const tag of doc.getTags()) {
+        const tagText = tag.getText().trim().replace(/\s+/g, " ")
+        if (tagText) parts.push(tagText)
+      }
+      return parts.join("\n")
+    })
+    .filter((text): text is string => Boolean(text))
+    .join("\n")
+    .slice(0, 2000)
+
+const unwrapFunctionInitializer = (node: Node): ArrowFunction | FunctionExpression | undefined => {
+  let current: Node = node
+  for (;;) {
+    if (Node.isArrowFunction(current) || Node.isFunctionExpression(current)) return current
+    if (Node.isParenthesizedExpression(current)) {
+      current = current.getExpression()
+      continue
+    }
+    if (Node.isAsExpression(current) || Node.isSatisfiesExpression(current)) {
+      current = current.getExpression()
+      continue
+    }
+    return undefined
+  }
+}
+
+const isFunctionInitializer = (node: Node): boolean => unwrapFunctionInitializer(node) !== undefined
+
 export const ParserLive = Layer.succeed(Parser, {
   parse: (filePath: string, content: string) =>
     Effect.try({
       try: () => {
+        const language = languageForPath(filePath)
+        if (language && !isTypeScriptLanguage(language)) {
+          return parseGenericFile(language, filePath, content)
+        }
+
         const project = new Project({
           useInMemoryFileSystem: true,
           skipAddingFilesFromTsConfig: true,
@@ -40,14 +104,15 @@ export const ParserLive = Layer.succeed(Parser, {
         for (const fn of sourceFile.getFunctions()) {
           const name = fn.getName()
           if (!name) continue
-          const signature = getHeaderSignature(fn.getText())
+          const signature = getSignatureBeforeBody(fn, fn.getBody())
           symbols.push({
             name,
             kind: "function",
             startLine: fn.getStartLineNumber(),
             endLine: fn.getEndLineNumber(),
             signature,
-            exported: fn.isExported()
+            exported: fn.isExported(),
+            doc: getDocText(fn)
           })
         }
 
@@ -62,7 +127,8 @@ export const ParserLive = Layer.succeed(Parser, {
             startLine: cls.getStartLineNumber(),
             endLine: cls.getEndLineNumber(),
             signature,
-            exported: cls.isExported()
+            exported: cls.isExported(),
+            doc: getDocText(cls)
           })
 
           // Extends
@@ -100,7 +166,7 @@ export const ParserLive = Layer.succeed(Parser, {
           // Methods
           for (const method of cls.getMethods()) {
             const methodName = method.getName()
-            const methodSig = getHeaderSignature(method.getText())
+            const methodSig = getSignatureBeforeBody(method, method.getBody())
             symbols.push({
               name: `${name}.${methodName}`,
               kind: "method",
@@ -108,6 +174,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: method.getEndLineNumber(),
               signature: methodSig,
               exported: cls.isExported(),
+              doc: getDocText(method),
               containerName: name
             })
 
@@ -129,6 +196,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: prop.getEndLineNumber(),
               signature: prop.getText().split(";")[0]?.trim() ?? propName,
               exported: cls.isExported(),
+              doc: getDocText(prop),
               containerName: name
             })
 
@@ -151,7 +219,8 @@ export const ParserLive = Layer.succeed(Parser, {
             startLine: iface.getStartLineNumber(),
             endLine: iface.getEndLineNumber(),
             signature,
-            exported: iface.isExported()
+            exported: iface.isExported(),
+            doc: getDocText(iface)
           })
 
           // Extends
@@ -174,6 +243,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: method.getEndLineNumber(),
               signature: method.getText().trim(),
               exported: iface.isExported(),
+              doc: getDocText(method),
               containerName: name
             })
 
@@ -194,6 +264,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: prop.getEndLineNumber(),
               signature: prop.getText().trim(),
               exported: iface.isExported(),
+              doc: getDocText(prop),
               containerName: name
             })
 
@@ -209,14 +280,15 @@ export const ParserLive = Layer.succeed(Parser, {
         // 4. Type Aliases
         for (const typeAlias of sourceFile.getTypeAliases()) {
           const name = typeAlias.getName()
-          const signature = getHeaderSignature(typeAlias.getText())
+          const signature = normalizeSignature(typeAlias.getText())
           symbols.push({
             name,
             kind: "type",
             startLine: typeAlias.getStartLineNumber(),
             endLine: typeAlias.getEndLineNumber(),
             signature,
-            exported: typeAlias.isExported()
+            exported: typeAlias.isExported(),
+            doc: getDocText(typeAlias)
           })
         }
 
@@ -230,7 +302,8 @@ export const ParserLive = Layer.succeed(Parser, {
             startLine: en.getStartLineNumber(),
             endLine: en.getEndLineNumber(),
             signature,
-            exported: en.isExported()
+            exported: en.isExported(),
+            doc: getDocText(en)
           })
 
           for (const member of en.getMembers()) {
@@ -242,6 +315,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: member.getEndLineNumber(),
               signature: member.getText().trim(),
               exported: en.isExported(),
+              doc: getDocText(member),
               containerName: name
             })
 
@@ -261,19 +335,44 @@ export const ParserLive = Layer.succeed(Parser, {
             const name = decl.getName()
             const initializer = decl.getInitializer()
             let kind: SymbolKind = "const"
-            if (initializer && Node.isArrowFunction(initializer)) {
+            if (initializer && isFunctionInitializer(initializer)) {
               kind = "function"
             }
 
-            const rawSig = decl.getText().split("=")[0]?.trim() ?? name
-            const signature = `${varStmt.getDeclarationKind()} ${rawSig}`
+            const declarationKind = varStmt.getDeclarationKind()
+            const functionInitializer =
+              initializer && isFunctionInitializer(initializer)
+                ? unwrapFunctionInitializer(initializer)
+                : undefined
+            const typeNode = decl.getTypeNode()?.getText()
+
+            let signature: string
+            if (functionInitializer) {
+              const params = functionInitializer
+                .getParameters()
+                .map((param) => param.getText())
+                .join(", ")
+              const returnType = Node.isArrowFunction(functionInitializer)
+                ? functionInitializer.getReturnTypeNode()?.getText()
+                : undefined
+              signature = `${declarationKind} ${name}${typeNode ? `: ${typeNode}` : ""} = (${params})${
+                returnType ? `: ${returnType}` : ""
+              } =>`
+            } else {
+              const rawSig = decl.getText().split("=")[0]?.trim() ?? name
+              signature = `${declarationKind} ${rawSig}`
+            }
+            if (signature.length > MAX_SIGNATURE_LENGTH) {
+              signature = `${signature.slice(0, MAX_SIGNATURE_LENGTH - 3)}...`
+            }
             symbols.push({
               name,
               kind,
               startLine: decl.getStartLineNumber(),
               endLine: decl.getEndLineNumber(),
               signature,
-              exported: isExported
+              exported: isExported,
+              doc: getDocText(varStmt)
             })
           }
         }
@@ -318,38 +417,36 @@ export const ParserLive = Layer.succeed(Parser, {
           }
         }
 
-        // Helper: find enclosing symbol for an AST node
-        const findEnclosingSymbol = (node: Node): string | undefined => {
-          let current: Node | undefined = node.getParent()
-          while (current && !Node.isSourceFile(current)) {
-            if (Node.isMethodDeclaration(current)) {
-              const cls = current.getParent()
-              if (Node.isClassDeclaration(cls) && cls.getName()) {
-                return `${cls.getName()}.${current.getName()}`
-              }
-              return current.getName()
+        // Resolve the caller by position instead of walking AST parents. This
+        // correctly attributes calls inside arrow functions passed to
+        // `Effect.gen`, `Layer.effect`, object literals, etc. to the nearest
+        // named function, then to the nearest containing const/class.
+        const callableSymbols = symbols.filter(
+          (symbol) => symbol.kind === "function" || symbol.kind === "method"
+        )
+        const containerSymbols = symbols.filter(
+          (symbol) => symbol.kind === "const" || symbol.kind === "class"
+        )
+
+        const smallestContaining = (
+          candidates: readonly ParsedSymbol[],
+          line: number
+        ): ParsedSymbol | undefined => {
+          let best: ParsedSymbol | undefined
+          for (const candidate of candidates) {
+            if (line < candidate.startLine || line > candidate.endLine) continue
+            if (!best || candidate.endLine - candidate.startLine < best.endLine - best.startLine) {
+              best = candidate
             }
-            if (Node.isFunctionDeclaration(current)) {
-              return current.getName()
-            }
-            if (Node.isVariableDeclaration(current)) {
-              // Only treat a variable as the enclosing symbol when it holds a
-              // function; otherwise `const op = new Foo()` would make "op" the
-              // caller of Foo instead of the surrounding function.
-              const initializer = current.getInitializer()
-              if (
-                initializer &&
-                (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))
-              ) {
-                return current.getName()
-              }
-            }
-            if (Node.isClassDeclaration(current)) {
-              return current.getName()
-            }
-            current = current.getParent()
           }
-          return undefined
+          return best
+        }
+
+        const findEnclosingSymbol = (node: Node): string | undefined => {
+          const line = node.getStartLineNumber()
+          return (
+            smallestContaining(callableSymbols, line) ?? smallestContaining(containerSymbols, line)
+          )?.name
         }
 
         // 8. Call expressions (both `foo()` and `new Foo()`)

@@ -72,6 +72,36 @@ describe("HTTP API & visualization", () => {
             )
             expect(htmlRes).toContain("CodeGraph")
             expect(htmlRes).toContain("cytoscape")
+
+            // 7. POST /api/reindex refreshes an existing repository
+            const reindexRes = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/reindex`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ repoId: report.repoId })
+              }).then((r) => r.json())
+            )
+            expect(reindexRes.filesIndexed).toBe(0)
+            expect(reindexRes.filesSkipped).toBe(1)
+
+            // 8. POST /api/index indexes a new folder from the web UI/API
+            const secondDir = path.join(tmpDir, "second-repo")
+            yield* fs.makeDirectory(secondDir, { recursive: true })
+            yield* fs.writeFileString(path.join(secondDir, "other.ts"), `export const answer = 42;`)
+            const indexRes = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/index`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ path: secondDir, name: "second-repo" })
+              }).then((r) => r.json())
+            )
+            expect(indexRes.filesIndexed).toBe(1)
+            expect(indexRes.repoName).toBe("second-repo")
+
+            const reposAfter = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/repos`).then((r) => r.json())
+            )
+            expect(reposAfter.length).toBe(2)
           })
         )
       } finally {

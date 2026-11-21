@@ -4,6 +4,7 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { Context, Effect, Layer } from "effect"
 import ignore from "ignore"
 import { WalkError } from "../domain/errors.js"
+import { SOURCE_EXTENSIONS } from "../domain/languages.js"
 import type { FileScanResult } from "../domain/models.js"
 
 export interface FileWalker {
@@ -15,7 +16,6 @@ export interface FileWalker {
 
 export const FileWalker = Context.GenericTag<FileWalker>("@codegraph/FileWalker")
 
-const VALID_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"])
 const DEFAULT_IGNORED_DIRS = new Set([
   "node_modules",
   ".git",
@@ -24,7 +24,18 @@ const DEFAULT_IGNORED_DIRS = new Set([
   ".next",
   "coverage",
   ".turbo",
-  ".cache"
+  ".cache",
+  "vendor",
+  "target",
+  "bin",
+  "obj",
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".gradle",
+  ".idea",
+  "Pods",
+  "DerivedData"
 ])
 
 export const FileWalkerLive = Layer.effect(
@@ -65,6 +76,16 @@ export const FileWalkerLive = Layer.effect(
           "*.sqlite",
           "*.sqlite-journal",
           "*.sqlite-wal",
+          "vendor",
+          "target",
+          "bin",
+          "obj",
+          ".venv",
+          "venv",
+          "__pycache__",
+          ".gradle",
+          "Pods",
+          "DerivedData",
           ".DS_Store"
         ])
 
@@ -137,8 +158,12 @@ export const FileWalkerLive = Layer.effect(
                 yield* traverse(fullPath)
               } else if (stat.type === "File") {
                 const ext = path.extname(entry).toLowerCase()
-                // Skip if not a valid script extension or is a declaration file
-                if (!VALID_EXTENSIONS.has(ext) || entry.endsWith(".d.ts")) {
+                // Skip unsupported files, type declarations and minified bundles.
+                if (
+                  !SOURCE_EXTENSIONS.has(ext) ||
+                  entry.endsWith(".d.ts") ||
+                  entry.endsWith(".min.js")
+                ) {
                   continue
                 }
 

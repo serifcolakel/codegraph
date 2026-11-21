@@ -78,4 +78,98 @@ export type UserId = string;
       ).toBe(true)
     }).pipe(Effect.provide(ParserLive))
   )
+
+  it.effect("attributes calls in object-literal callbacks to the containing symbol", () =>
+    Effect.gen(function* () {
+      const parser = yield* Parser
+      const parsed = yield* parser.parse(
+        "src/config.ts",
+        `
+function helper() {
+  return 42;
+}
+
+export const config = createConfig({
+  onReady: () => helper()
+});
+`
+      )
+
+      const callEdges = parsed.edges.filter((e) => e.kind === "call")
+      expect(callEdges.some((e) => e.srcName === "config" && e.dstName === "helper")).toBe(true)
+    }).pipe(Effect.provide(ParserLive))
+  )
+
+  it.effect("extracts typed arrow components with docs and full signatures", () =>
+    Effect.gen(function* () {
+      const parser = yield* Parser
+      const parsed = yield* parser.parse(
+        "src/UIFundsCompare.tsx",
+        `
+/** Compares a list of funds. */
+export const UIFundsCompare: ({ fund_codes }: { fund_codes: string[] }) => JSX.Element = ({
+  fund_codes,
+}) => <div>{fund_codes.join(",")}</div>
+`
+      )
+
+      const symbol = parsed.symbols.find((s) => s.name === "UIFundsCompare")
+      expect(symbol?.kind).toBe("function")
+      expect(symbol?.doc).toContain("Compares a list of funds")
+      expect(symbol?.signature).toContain("fund_codes")
+      expect(symbol?.signature).toContain("JSX.Element")
+    }).pipe(Effect.provide(ParserLive))
+  )
+
+  it.effect("keeps full signatures for multiline object parameter types", () =>
+    Effect.gen(function* () {
+      const parser = yield* Parser
+      const parsed = yield* parser.parse(
+        "src/fund-returns.ts",
+        `
+/** Get fund sizes data */
+export function useFundSizes(
+  params: {
+    fundType: FundType;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+  },
+  options?: { enabled?: boolean },
+) {
+  return params;
+}
+`
+      )
+
+      const symbol = parsed.symbols.find((s) => s.name === "useFundSizes")
+      expect(symbol?.doc).toContain("Get fund sizes data")
+      expect(symbol?.signature).toContain("startDate?: string")
+      expect(symbol?.signature).toContain("options?: { enabled?: boolean }")
+      expect(symbol?.signature).toContain("export function useFundSizes")
+    }).pipe(Effect.provide(ParserLive))
+  )
+
+  it.effect("keeps JSDoc tags such as @throws in documentation", () =>
+    Effect.gen(function* () {
+      const parser = yield* Parser
+      const parsed = yield* parser.parse(
+        "src/use-tefas-client.ts",
+        `
+/**
+ * Hook to access the TEFAS client instance
+ * @throws Error if client is not initialized
+ */
+export function useTefasClient(): TefasClient {
+  throw new Error("not initialized");
+}
+`
+      )
+
+      const symbol = parsed.symbols.find((s) => s.name === "useTefasClient")
+      expect(symbol?.doc).toContain("Hook to access the TEFAS client instance")
+      expect(symbol?.doc).toContain("@throws Error if client is not initialized")
+      expect(symbol?.signature).toBe("export function useTefasClient(): TefasClient")
+    }).pipe(Effect.provide(ParserLive))
+  )
 })

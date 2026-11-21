@@ -49,11 +49,24 @@ export const initSchema = Effect.gen(function* () {
       end_line INTEGER NOT NULL,
       signature TEXT NOT NULL,
       exported INTEGER NOT NULL DEFAULT 0,
+      doc TEXT NOT NULL DEFAULT '',
       FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE
     );
   `.pipe(
     Effect.mapError((e) => new StoreError({ message: "Failed to create symbols table", cause: e }))
   )
+
+  // Lightweight migration for databases created before doc-comment indexing.
+  const symbolColumns = yield* sql<{ name: string }>`PRAGMA table_info(symbols);`.pipe(
+    Effect.mapError((e) => new StoreError({ message: "Failed to inspect symbols table", cause: e }))
+  )
+  if (!symbolColumns.some((column) => column.name === "doc")) {
+    yield* sql`ALTER TABLE symbols ADD COLUMN doc TEXT NOT NULL DEFAULT '';`.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to add symbols.doc column", cause: e })
+      )
+    )
+  }
 
   yield* sql`
     CREATE INDEX IF NOT EXISTS idx_symbols_file_id ON symbols(file_id);
@@ -94,15 +107,50 @@ export const initSchema = Effect.gen(function* () {
     Effect.mapError((e) => new StoreError({ message: "Failed to create idx_edges_dst", cause: e }))
   )
 
+  const ftsTables = yield* sql<{ name: string }>`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_fts';
+  `.pipe(
+    Effect.mapError((e) => new StoreError({ message: "Failed to inspect symbols_fts", cause: e }))
+  )
+
+  let repopulateFts = false
+  if (ftsTables.length > 0) {
+    const ftsColumns = yield* sql<{ name: string }>`PRAGMA table_info(symbols_fts);`.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to inspect symbols_fts columns", cause: e })
+      )
+    )
+    if (!ftsColumns.some((column) => column.name === "doc")) {
+      yield* sql`DROP TABLE symbols_fts;`.pipe(
+        Effect.mapError(
+          (e) => new StoreError({ message: "Failed to migrate symbols_fts", cause: e })
+        )
+      )
+      repopulateFts = true
+    }
+  }
+
   yield* sql`
     CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
       symbol_id UNINDEXED,
       name,
-      signature
+      signature,
+      doc
     );
   `.pipe(
     Effect.mapError(
       (e) => new StoreError({ message: "Failed to create symbols_fts virtual table", cause: e })
     )
   )
+
+  if (repopulateFts) {
+    yield* sql`
+      INSERT INTO symbols_fts (symbol_id, name, signature, doc)
+      SELECT id, name, signature, doc FROM symbols;
+    `.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to repopulate symbols_fts", cause: e })
+      )
+    )
+  }
 })

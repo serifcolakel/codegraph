@@ -11,6 +11,9 @@ import { Effect, type ManagedRuntime, Schema } from "effect"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { IndexStore } from "../services/IndexStore.js"
 
+const docSnippet = (doc?: string): string =>
+  doc ? doc.replace(/\s+/g, " ").trim().slice(0, 180) : ""
+
 // Tool Input Schemas
 export const RepoMapInput = Schema.Struct({
   repoId: Schema.optional(Schema.String),
@@ -137,7 +140,12 @@ export const createMcpServer = <R>(
             type: "object",
             properties: {
               symbolId: { type: "string", description: "Center symbol ID" },
-              depth: { type: "number", description: "Search depth (default 1, max 4)" }
+              depth: {
+                type: "number",
+                minimum: 1,
+                maximum: 8,
+                description: "Search depth in hops (default 1, max 8, capped at 500 nodes)"
+              }
             },
             required: ["symbolId"]
           }
@@ -200,9 +208,10 @@ export const createMcpServer = <R>(
               return yield* query.outlineFile(repoId, args.path)
             })
           )
-          const lines = symbols.map(
-            (s) => `L${s.startLine}-${s.endLine} [${s.kind}] ${s.signature}`
-          )
+          const lines = symbols.map((s) => {
+            const doc = docSnippet(s.doc)
+            return `L${s.startLine}-${s.endLine} [${s.kind}] ${s.signature}${doc ? `\n  doc: ${doc}` : ""}`
+          })
           return {
             content: [
               {
@@ -221,10 +230,10 @@ export const createMcpServer = <R>(
               return yield* query.searchSymbols(args.query, args.limit ?? 20, args.repoId)
             })
           )
-          const lines = results.map(
-            (s) =>
-              `${s.name} (${s.kind}) in ${s.filePath}:${s.startLine}\n  ID: ${s.id}\n  In-degree: ${s.inDegree ?? 0}\n  ${s.signature}`
-          )
+          const lines = results.map((s) => {
+            const doc = docSnippet(s.doc)
+            return `${s.name} (${s.kind}) in ${s.filePath}:${s.startLine}\n  ID: ${s.id}\n  In-degree: ${s.inDegree ?? 0}\n  ${s.signature}${doc ? `\n  doc: ${doc}` : ""}`
+          })
           return {
             content: [
               {
@@ -338,5 +347,12 @@ export const startMcpServer = <R>(
 ) => {
   const server = createMcpServer(runtime)
   const transport = new StdioServerTransport()
-  return server.connect(transport)
+
+  // `connect` resolves as soon as the transport starts. Keep the caller's
+  // effect alive until the transport closes, otherwise the CLI's scoped
+  // SqlClient is finalized while the MCP process is still serving requests.
+  return new Promise<void>((resolve, reject) => {
+    server.onclose = () => resolve()
+    server.connect(transport).catch(reject)
+  })
 }

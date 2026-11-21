@@ -167,13 +167,13 @@ export const IndexStoreLive = Layer.effect(
                 nameToSymbolId.set(sym.name, symbolId)
 
                 yield* sql`
-                INSERT INTO symbols (id, name, kind, file_id, start_line, end_line, signature, exported)
-                VALUES (${symbolId}, ${sym.name}, ${sym.kind}, ${fileId}, ${sym.startLine}, ${sym.endLine}, ${sym.signature}, ${sym.exported ? 1 : 0});
+                INSERT INTO symbols (id, name, kind, file_id, start_line, end_line, signature, exported, doc)
+                VALUES (${symbolId}, ${sym.name}, ${sym.kind}, ${fileId}, ${sym.startLine}, ${sym.endLine}, ${sym.signature}, ${sym.exported ? 1 : 0}, ${sym.doc ?? ""});
               `
 
                 yield* sql`
-                INSERT INTO symbols_fts (symbol_id, name, signature)
-                VALUES (${symbolId}, ${sym.name}, ${sym.signature});
+                INSERT INTO symbols_fts (symbol_id, name, signature, doc)
+                VALUES (${symbolId}, ${sym.name}, ${sym.signature}, ${sym.doc ?? ""});
               `
               }
 
