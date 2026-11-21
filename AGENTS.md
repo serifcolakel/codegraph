@@ -2,7 +2,7 @@
 
 ## Architecture
 
-- CodeGraph is a local TypeScript/JavaScript repository indexer built with Effect-TS.
+- CodeGraph is a local, multi-language repository indexer built with Effect-TS.
 - Keep capabilities behind Effect services: `Context.GenericTag` plus `Layer` implementations.
 - Wire dependencies through `Layer`; do not introduce module-level mutable state or global singletons.
 - Use typed `Data.TaggedError` classes from `src/domain/errors.ts` for recoverable failures.
@@ -18,6 +18,29 @@
 - Run tests with `npm test`.
 - Run Biome checks with `npm run check`; apply only safe repository fixes with `npm run check:fix`.
 - Vitest tests live in `tests/**/*.test.ts` and use `@effect/vitest` for Effect-based tests.
+
+## Test-Driven Workflow
+
+- Work test-first for behavior changes: add or update the focused test or fixture, confirm it fails for the right reason, then implement.
+- Every bug fix needs a regression test that reproduces the original failure.
+- While iterating, run the narrowest test: `npm test -- tests/<file>.test.ts`; run the full `npm test` before finishing.
+- Parser changes: add one representative fixture per affected language and cover symbols, docs/tags, full signatures and edges.
+- Indexing changes: verify a fresh index, an incremental re-index, a changed file, a deleted file, and FTS/edge consistency.
+- Query, HTTP and MCP changes: assert response shapes, limits (`truncated`, depth caps, paging), error paths and `file:line` output.
+- Schema changes: test migration from the previous schema, including FTS repopulation.
+- UI changes: run `serve`, load `/` and verify the affected controls, empty states and browser console; use a headless-browser smoke check when possible.
+- Finish only when typecheck, focused tests, full tests, Biome and build pass.
+
+### Manual Smoke Checks
+
+```bash
+npm run build
+CODEGRAPH_DB_PATH=/tmp/codegraph-test.sqlite node dist/cli/index.js index <path> --force
+CODEGRAPH_DB_PATH=/tmp/codegraph-test.sqlite node dist/cli/index.js serve --port 4310
+```
+
+Verify `/api/repos`, `/api/graph`, `/api/search`, the MCP tools and the UI before calling a
+phase complete.
 
 ## Implementation Conventions
 

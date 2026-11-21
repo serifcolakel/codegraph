@@ -186,8 +186,9 @@ These require explicit approval before adding:
 
 ## Delivery Rules
 
+- Test-first: every roadmap item starts with a focused test or fixture, and bug fixes include a regression test. See the Test-Driven Workflow in [AGENTS.md](AGENTS.md).
 - Work in phases; each phase must build, test and be runnable before the next.
 - Add focused tests for parser, indexing, query, HTTP and MCP changes.
-- Run `npm run typecheck`, `npm test` and `npm run check` after substantive edits.
+- Run `npm run typecheck`, `npm test`, `npm run check` and `npm run build` after substantive edits.
 - Update `README.md` for user-facing changes and `AGENTS.md` only when conventions change.
 - Keep unrelated worktree edits untouched.
