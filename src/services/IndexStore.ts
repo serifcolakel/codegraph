@@ -2,7 +2,20 @@ import * as SqlClient from "@effect/sql/SqlClient"
 import { Context, Effect, Layer } from "effect"
 import { initSchema } from "../db/schema.js"
 import { StoreError } from "../domain/errors.js"
-import type { FileRecord, ParsedFile, RepoRecord, StatsReport } from "../domain/models.js"
+import { languageForPath } from "../domain/languages.js"
+import type {
+  FileRecord,
+  ParseCoverage,
+  ParsedFile,
+  ParseStatus,
+  RepoRecord,
+  StatsReport
+} from "../domain/models.js"
+import { qualifyName, tokenizeIdentifier } from "../domain/naming.js"
+
+const PARSE_STATUSES: ReadonlySet<string> = new Set(["parsed", "partial", "skipped", "unsupported"])
+
+const isParseStatus = (value: string): value is ParseStatus => PARSE_STATUSES.has(value)
 
 export interface StoredRawEdge {
   readonly id: string
@@ -32,6 +45,7 @@ export interface IndexStore {
   readonly deleteFiles: (fileIds: readonly string[]) => Effect.Effect<void, StoreError>
   readonly resolveEdges: (repoId: string) => Effect.Effect<number, StoreError>
   readonly getStats: (repoId?: string) => Effect.Effect<StatsReport, StoreError>
+  readonly getCoverage: (repoId: string) => Effect.Effect<ParseCoverage, StoreError>
 }
 
 export const IndexStore = Context.GenericTag<IndexStore>("@codegraph/IndexStore")
@@ -84,8 +98,16 @@ export const IndexStoreLive = Layer.effect(
 
     const getFiles = (repoId: string): Effect.Effect<Map<string, FileRecord>, StoreError> =>
       Effect.gen(function* () {
-        const rows = yield* sql<{ id: string; path: string; hash: string; repo_id: string }>`
-          SELECT id, path, hash, repo_id FROM files WHERE repo_id = ${repoId};
+        const rows = yield* sql<{
+          id: string
+          path: string
+          hash: string
+          repo_id: string
+          language: string
+          parse_status: string
+        }>`
+          SELECT id, path, hash, repo_id, language, parse_status
+          FROM files WHERE repo_id = ${repoId};
         `.pipe(
           Effect.mapError((e) => new StoreError({ message: "Failed to query files", cause: e }))
         )
@@ -96,7 +118,9 @@ export const IndexStoreLive = Layer.effect(
             id: row.id,
             path: row.path,
             hash: row.hash,
-            repoId: row.repo_id
+            repoId: row.repo_id,
+            language: row.language,
+            parseStatus: isParseStatus(row.parse_status) ? row.parse_status : undefined
           })
         }
         return map
@@ -146,6 +170,8 @@ export const IndexStoreLive = Layer.effect(
     ): Effect.Effect<void, StoreError> =>
       Effect.gen(function* () {
         const fileId = `${repoId}:${filePath}`
+        const language = languageForPath(filePath) ?? ""
+        const parseStatus: ParseStatus = parsed.parseStatus ?? "parsed"
 
         yield* sql
           .withTransaction(
@@ -155,8 +181,8 @@ export const IndexStoreLive = Layer.effect(
 
               // Insert file
               yield* sql`
-              INSERT INTO files (id, path, hash, repo_id)
-              VALUES (${fileId}, ${filePath}, ${hash}, ${repoId});
+              INSERT INTO files (id, path, hash, repo_id, language, parse_status)
+              VALUES (${fileId}, ${filePath}, ${hash}, ${repoId}, ${language}, ${parseStatus});
             `
 
               // Insert symbols
@@ -165,15 +191,26 @@ export const IndexStoreLive = Layer.effect(
               for (const sym of parsed.symbols) {
                 const symbolId = `${fileId}#${sym.name}:${sym.startLine}`
                 nameToSymbolId.set(sym.name, symbolId)
+                const qualifiedName = qualifyName(filePath, sym.name, sym.containerName)
 
                 yield* sql`
-                INSERT INTO symbols (id, name, kind, file_id, start_line, end_line, signature, exported, doc)
-                VALUES (${symbolId}, ${sym.name}, ${sym.kind}, ${fileId}, ${sym.startLine}, ${sym.endLine}, ${sym.signature}, ${sym.exported ? 1 : 0}, ${sym.doc ?? ""});
+                INSERT INTO symbols (
+                  id, name, kind, file_id, start_line, end_line, signature, exported, doc,
+                  language, qualified_name, visibility, container_name
+                )
+                VALUES (
+                  ${symbolId}, ${sym.name}, ${sym.kind}, ${fileId}, ${sym.startLine}, ${sym.endLine},
+                  ${sym.signature}, ${sym.exported ? 1 : 0}, ${sym.doc ?? ""},
+                  ${language}, ${qualifiedName}, ${sym.visibility ?? ""}, ${sym.containerName ?? ""}
+                );
               `
 
                 yield* sql`
-                INSERT INTO symbols_fts (symbol_id, name, signature, doc)
-                VALUES (${symbolId}, ${sym.name}, ${sym.signature}, ${sym.doc ?? ""});
+                INSERT INTO symbols_fts (symbol_id, name, signature, doc, tokens)
+                VALUES (
+                  ${symbolId}, ${sym.name}, ${sym.signature}, ${sym.doc ?? ""},
+                  ${tokenizeIdentifier(`${sym.name} ${qualifiedName}`)}
+                );
               `
               }
 
@@ -342,6 +379,58 @@ export const IndexStoreLive = Layer.effect(
         return resolvedCount
       })
 
+    const getCoverage = (repoId: string): Effect.Effect<ParseCoverage, StoreError> =>
+      Effect.gen(function* () {
+        const statusRows = yield* sql<{ status: string; count: number }>`
+          SELECT CASE
+            WHEN parse_status IN ('parsed', 'partial', 'skipped', 'unsupported') THEN parse_status
+            ELSE 'unknown'
+          END as status, COUNT(*) as count
+          FROM files
+          WHERE repo_id = ${repoId}
+          GROUP BY status;
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Failed to get coverage", cause: e }))
+        )
+
+        const languageRows = yield* sql<{ language: string; count: number }>`
+          SELECT CASE WHEN language = '' THEN 'unknown' ELSE language END as language,
+                 COUNT(*) as count
+          FROM files
+          WHERE repo_id = ${repoId}
+          GROUP BY language;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to get language coverage", cause: e })
+          )
+        )
+
+        const counts: Record<string, number> = {
+          parsed: 0,
+          partial: 0,
+          skipped: 0,
+          unsupported: 0,
+          unknown: 0
+        }
+        for (const row of statusRows) {
+          counts[row.status] = row.count
+        }
+
+        const languages: Record<string, number> = {}
+        for (const row of languageRows) {
+          languages[row.language] = row.count
+        }
+
+        return {
+          parsed: counts.parsed ?? 0,
+          partial: counts.partial ?? 0,
+          skipped: counts.skipped ?? 0,
+          unsupported: counts.unsupported ?? 0,
+          unknown: counts.unknown ?? 0,
+          languages
+        }
+      })
+
     const getStats = (repoId?: string): Effect.Effect<StatsReport, StoreError> =>
       Effect.gen(function* () {
         const reposCount = yield* sql<{ count: number }>`SELECT COUNT(*) as count FROM repos;`
@@ -383,7 +472,8 @@ export const IndexStoreLive = Layer.effect(
       saveFileIndex,
       deleteFiles,
       resolveEdges,
-      getStats
+      getStats,
+      getCoverage
     }
   })
 )

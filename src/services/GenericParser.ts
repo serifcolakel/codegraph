@@ -261,6 +261,24 @@ const isExported = (language: Language, line: string, name: string): boolean => 
   }
 }
 
+const visibilityFor = (
+  language: Language,
+  line: string,
+  exported: boolean
+): ParsedSymbol["visibility"] => {
+  const explicit = line.match(/\b(public|private|protected|internal)\b/)
+  const keyword = explicit?.[1]
+  if (keyword === "public" || keyword === "private" || keyword === "protected") {
+    return keyword
+  }
+  if (keyword === "internal") return "internal"
+  if (language === "go") return exported ? "public" : "package"
+  if (language === "rust" || language === "python" || language === "ruby") {
+    return exported ? "public" : "private"
+  }
+  return exported ? "public" : undefined
+}
+
 const kindForContainer = (keyword: string): SymbolKind => {
   if (keyword === "interface" || keyword === "protocol" || keyword === "trait") return "interface"
   if (keyword === "enum") return "enum"
@@ -635,6 +653,7 @@ const parseBraceLanguage = (language: Language, lines: readonly string[]): Parse
               endLine: lineNumber,
               signature: normalize(line),
               exported: isExported(language, line, container.name),
+              visibility: visibilityFor(language, line, isExported(language, line, container.name)),
               doc: extractDoc(lines, index, language)
             }
 
@@ -677,6 +696,7 @@ const parseBraceLanguage = (language: Language, lines: readonly string[]): Parse
           endLine: lineNumber,
           signature: normalize(line),
           exported: isExported(language, line, fn.name),
+          visibility: visibilityFor(language, line, isExported(language, line, fn.name)),
           doc: extractDoc(lines, index, language),
           ...(fn.containerName ? { containerName: fn.containerName } : {})
         }
@@ -708,6 +728,7 @@ const parseBraceLanguage = (language: Language, lines: readonly string[]): Parse
             endLine: lineNumber,
             signature: normalize(line),
             exported: isExported(language, line, constant),
+            visibility: visibilityFor(language, line, isExported(language, line, constant)),
             doc: extractDoc(lines, index, language),
             ...(currentContainer ? { containerName: currentContainer } : {})
           })
@@ -805,6 +826,7 @@ const parsePython = (lines: readonly string[]): ParsedFile => {
         endLine: end,
         signature: normalize(line),
         exported: !name.startsWith("_"),
+        visibility: visibilityFor("python", line, !name.startsWith("_")),
         doc
       })
 
@@ -829,6 +851,7 @@ const parsePython = (lines: readonly string[]): ParsedFile => {
         endLine: end,
         signature: normalize(line),
         exported: !fn[1].startsWith("_"),
+        visibility: visibilityFor("python", line, !fn[1].startsWith("_")),
         doc,
         ...(container ? { containerName: container.name } : {})
       })
@@ -871,6 +894,7 @@ const parsePython = (lines: readonly string[]): ParsedFile => {
         endLine: index + 1,
         signature: normalize(line),
         exported: true,
+        visibility: "public",
         doc: extractDoc(lines, index, "python")
       })
     }
@@ -929,6 +953,7 @@ const parseRuby = (lines: readonly string[]): ParsedFile => {
         endLine: end,
         signature: normalize(line),
         exported: true,
+        visibility: "public",
         doc: extractDoc(lines, index, "ruby")
       })
       containers.push({ name, end })
@@ -947,6 +972,7 @@ const parseRuby = (lines: readonly string[]): ParsedFile => {
         endLine: end,
         signature: normalize(line),
         exported: !fn[1].startsWith("_"),
+        visibility: visibilityFor("ruby", line, !fn[1].startsWith("_")),
         doc: extractDoc(lines, index, "ruby"),
         ...(container ? { containerName: container.name } : {})
       })
@@ -978,5 +1004,5 @@ export const parseGenericFile = (
         ? parseRuby(lines)
         : parseBraceLanguage(language, lines)
 
-  return { ...parsed, path: filePath }
+  return { ...parsed, path: filePath, parseStatus: "partial" }
 }

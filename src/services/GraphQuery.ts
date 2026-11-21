@@ -454,10 +454,18 @@ export const GraphQueryLive = Layer.effect(
     ): Effect.Effect<readonly SymbolRecord[], StoreError | NotFoundError> =>
       Effect.gen(function* () {
         const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\.\//, "")
-        const rows = yield* sql<Omit<SymbolRecord, "exported"> & { exported: number }>`
+        const rows = yield* sql<
+          Omit<SymbolRecord, "exported" | "visibility" | "containerName"> & {
+            exported: number
+            visibility: string
+            containerName: string
+          }
+        >`
           SELECT s.id, s.name, s.kind, s.file_id as fileId,
                  s.start_line as startLine, s.end_line as endLine,
-                 s.signature, s.exported as exported, s.doc
+                 s.signature, s.exported as exported, s.doc,
+                 s.language, s.qualified_name as qualifiedName,
+                 s.visibility, s.container_name as containerName
           FROM symbols s
           JOIN files f ON s.file_id = f.id
           JOIN repos r ON f.repo_id = r.id
@@ -468,7 +476,19 @@ export const GraphQueryLive = Layer.effect(
           Effect.mapError((e) => new StoreError({ message: "Outline file query failed", cause: e }))
         )
 
-        return rows.map((row) => ({ ...row, exported: row.exported === 1 }))
+        return rows.map((row) => ({
+          ...row,
+          exported: row.exported === 1,
+          visibility:
+            row.visibility === "public" ||
+            row.visibility === "private" ||
+            row.visibility === "protected" ||
+            row.visibility === "internal" ||
+            row.visibility === "package"
+              ? row.visibility
+              : undefined,
+          containerName: row.containerName === "" ? undefined : row.containerName
+        }))
       })
 
     const neighborhood = (

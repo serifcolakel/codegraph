@@ -2,7 +2,13 @@ import { Context, Effect, Layer } from "effect"
 import { type ArrowFunction, type FunctionExpression, Node, Project, SyntaxKind } from "ts-morph"
 import { ParseError } from "../domain/errors.js"
 import { isTypeScriptLanguage, languageForPath } from "../domain/languages.js"
-import type { ParsedEdge, ParsedFile, ParsedSymbol, SymbolKind } from "../domain/models.js"
+import type {
+  ParsedEdge,
+  ParsedFile,
+  ParsedSymbol,
+  SymbolKind,
+  SymbolVisibility
+} from "../domain/models.js"
 import { parseGenericFile } from "./GenericParser.js"
 
 export interface Parser {
@@ -34,6 +40,13 @@ const getHeaderSignature = (text: string): string => {
   const header = braceIdx === -1 ? text : text.slice(0, braceIdx)
   return normalizeSignature(header)
 }
+
+const visibilityForScope = (scope: string | undefined): SymbolVisibility | undefined =>
+  scope === "public" || scope === "private" || scope === "protected" ? scope : undefined
+
+// Top-level declarations are public when exported and module-private otherwise.
+const visibilityForDeclaration = (exported: boolean): SymbolVisibility =>
+  exported ? "public" : "private"
 
 type DocComment = {
   getCommentText(): string | undefined
@@ -112,6 +125,7 @@ export const ParserLive = Layer.succeed(Parser, {
             endLine: fn.getEndLineNumber(),
             signature,
             exported: fn.isExported(),
+            visibility: visibilityForDeclaration(fn.isExported()),
             doc: getDocText(fn)
           })
         }
@@ -128,6 +142,7 @@ export const ParserLive = Layer.succeed(Parser, {
             endLine: cls.getEndLineNumber(),
             signature,
             exported: cls.isExported(),
+            visibility: visibilityForDeclaration(cls.isExported()),
             doc: getDocText(cls)
           })
 
@@ -174,6 +189,8 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: method.getEndLineNumber(),
               signature: methodSig,
               exported: cls.isExported(),
+              visibility:
+                visibilityForScope(method.getScope()) ?? visibilityForDeclaration(cls.isExported()),
               doc: getDocText(method),
               containerName: name
             })
@@ -196,6 +213,8 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: prop.getEndLineNumber(),
               signature: prop.getText().split(";")[0]?.trim() ?? propName,
               exported: cls.isExported(),
+              visibility:
+                visibilityForScope(prop.getScope()) ?? visibilityForDeclaration(cls.isExported()),
               doc: getDocText(prop),
               containerName: name
             })
@@ -220,6 +239,7 @@ export const ParserLive = Layer.succeed(Parser, {
             endLine: iface.getEndLineNumber(),
             signature,
             exported: iface.isExported(),
+            visibility: visibilityForDeclaration(iface.isExported()),
             doc: getDocText(iface)
           })
 
@@ -243,6 +263,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: method.getEndLineNumber(),
               signature: method.getText().trim(),
               exported: iface.isExported(),
+              visibility: "public",
               doc: getDocText(method),
               containerName: name
             })
@@ -264,6 +285,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: prop.getEndLineNumber(),
               signature: prop.getText().trim(),
               exported: iface.isExported(),
+              visibility: "public",
               doc: getDocText(prop),
               containerName: name
             })
@@ -288,6 +310,7 @@ export const ParserLive = Layer.succeed(Parser, {
             endLine: typeAlias.getEndLineNumber(),
             signature,
             exported: typeAlias.isExported(),
+            visibility: visibilityForDeclaration(typeAlias.isExported()),
             doc: getDocText(typeAlias)
           })
         }
@@ -303,6 +326,7 @@ export const ParserLive = Layer.succeed(Parser, {
             endLine: en.getEndLineNumber(),
             signature,
             exported: en.isExported(),
+            visibility: visibilityForDeclaration(en.isExported()),
             doc: getDocText(en)
           })
 
@@ -315,6 +339,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: member.getEndLineNumber(),
               signature: member.getText().trim(),
               exported: en.isExported(),
+              visibility: visibilityForDeclaration(en.isExported()),
               doc: getDocText(member),
               containerName: name
             })
@@ -372,6 +397,7 @@ export const ParserLive = Layer.succeed(Parser, {
               endLine: decl.getEndLineNumber(),
               signature,
               exported: isExported,
+              visibility: visibilityForDeclaration(isExported),
               doc: getDocText(varStmt)
             })
           }
@@ -493,7 +519,8 @@ export const ParserLive = Layer.succeed(Parser, {
         return {
           path: filePath,
           symbols,
-          edges
+          edges,
+          parseStatus: "parsed"
         }
       },
       catch: (e) =>

@@ -34,6 +34,9 @@ const indexCommand = Command.make(
       )
       yield* Console.log(`Symbols:       ${report.symbolsCount}`)
       yield* Console.log(`Edges:         ${report.edgesCount}`)
+      yield* Console.log(
+        `Coverage:      parsed ${report.coverage.parsed}, partial ${report.coverage.partial}, unsupported ${report.coverage.unsupported}, unknown ${report.coverage.unknown}`
+      )
       yield* Console.log(`Duration:      ${report.durationMs}ms\n`)
 
       if (watch) {

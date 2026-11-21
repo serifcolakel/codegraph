@@ -1,6 +1,7 @@
 import * as SqlClient from "@effect/sql/SqlClient"
 import { Effect } from "effect"
 import { StoreError } from "../domain/errors.js"
+import { tokenizeIdentifier } from "../domain/naming.js"
 
 export const initSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
@@ -25,11 +26,32 @@ export const initSchema = Effect.gen(function* () {
       path TEXT NOT NULL,
       hash TEXT NOT NULL,
       repo_id TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT '',
+      parse_status TEXT NOT NULL DEFAULT '',
       FOREIGN KEY(repo_id) REFERENCES repos(id) ON DELETE CASCADE
     );
   `.pipe(
     Effect.mapError((e) => new StoreError({ message: "Failed to create files table", cause: e }))
   )
+
+  const fileColumns = yield* sql<{ name: string }>`PRAGMA table_info(files);`.pipe(
+    Effect.mapError((e) => new StoreError({ message: "Failed to inspect files table", cause: e }))
+  )
+  const fileColumnNames = new Set(fileColumns.map((column) => column.name))
+  if (!fileColumnNames.has("language")) {
+    yield* sql`ALTER TABLE files ADD COLUMN language TEXT NOT NULL DEFAULT '';`.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to add files.language column", cause: e })
+      )
+    )
+  }
+  if (!fileColumnNames.has("parse_status")) {
+    yield* sql`ALTER TABLE files ADD COLUMN parse_status TEXT NOT NULL DEFAULT '';`.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to add files.parse_status column", cause: e })
+      )
+    )
+  }
 
   yield* sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_files_repo_path ON files(repo_id, path);
@@ -50,22 +72,33 @@ export const initSchema = Effect.gen(function* () {
       signature TEXT NOT NULL,
       exported INTEGER NOT NULL DEFAULT 0,
       doc TEXT NOT NULL DEFAULT '',
+      language TEXT NOT NULL DEFAULT '',
+      qualified_name TEXT NOT NULL DEFAULT '',
+      visibility TEXT NOT NULL DEFAULT '',
+      container_name TEXT NOT NULL DEFAULT '',
       FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE
     );
   `.pipe(
     Effect.mapError((e) => new StoreError({ message: "Failed to create symbols table", cause: e }))
   )
 
-  // Lightweight migration for databases created before doc-comment indexing.
+  // Lightweight forward migrations for databases created before symbol v2.
   const symbolColumns = yield* sql<{ name: string }>`PRAGMA table_info(symbols);`.pipe(
     Effect.mapError((e) => new StoreError({ message: "Failed to inspect symbols table", cause: e }))
   )
-  if (!symbolColumns.some((column) => column.name === "doc")) {
-    yield* sql`ALTER TABLE symbols ADD COLUMN doc TEXT NOT NULL DEFAULT '';`.pipe(
-      Effect.mapError(
-        (e) => new StoreError({ message: "Failed to add symbols.doc column", cause: e })
-      )
-    )
+  const symbolColumnNames = new Set(symbolColumns.map((column) => column.name))
+  const symbolMigrations: ReadonlyArray<readonly [string, string, string]> = [
+    ["doc", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.doc column"],
+    ["language", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.language column"],
+    ["qualified_name", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.qualified_name column"],
+    ["visibility", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.visibility column"],
+    ["container_name", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.container_name column"]
+  ]
+  for (const [name, definition, message] of symbolMigrations) {
+    if (symbolColumnNames.has(name)) continue
+    yield* sql
+      .unsafe(`ALTER TABLE symbols ADD COLUMN ${name} ${definition};`)
+      .pipe(Effect.mapError((e) => new StoreError({ message, cause: e })))
   }
 
   yield* sql`
@@ -81,6 +114,14 @@ export const initSchema = Effect.gen(function* () {
   `.pipe(
     Effect.mapError(
       (e) => new StoreError({ message: "Failed to create idx_symbols_name", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_symbols_qualified_name ON symbols(qualified_name);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_symbols_qualified_name", cause: e })
     )
   )
 
@@ -120,7 +161,8 @@ export const initSchema = Effect.gen(function* () {
         (e) => new StoreError({ message: "Failed to inspect symbols_fts columns", cause: e })
       )
     )
-    if (!ftsColumns.some((column) => column.name === "doc")) {
+    const ftsColumnNames = new Set(ftsColumns.map((column) => column.name))
+    if (!ftsColumnNames.has("doc") || !ftsColumnNames.has("tokens")) {
       yield* sql`DROP TABLE symbols_fts;`.pipe(
         Effect.mapError(
           (e) => new StoreError({ message: "Failed to migrate symbols_fts", cause: e })
@@ -135,7 +177,8 @@ export const initSchema = Effect.gen(function* () {
       symbol_id UNINDEXED,
       name,
       signature,
-      doc
+      doc,
+      tokens
     );
   `.pipe(
     Effect.mapError(
@@ -144,13 +187,38 @@ export const initSchema = Effect.gen(function* () {
   )
 
   if (repopulateFts) {
-    yield* sql`
-      INSERT INTO symbols_fts (symbol_id, name, signature, doc)
-      SELECT id, name, signature, doc FROM symbols;
+    const rows = yield* sql<{
+      id: string
+      name: string
+      qualifiedName: string
+      signature: string
+      doc: string
+    }>`
+      SELECT id, name, qualified_name as qualifiedName, signature, doc FROM symbols;
     `.pipe(
       Effect.mapError(
-        (e) => new StoreError({ message: "Failed to repopulate symbols_fts", cause: e })
+        (e) => new StoreError({ message: "Failed to read symbols for FTS rebuild", cause: e })
       )
+    )
+
+    yield* Effect.forEach(
+      rows,
+      (row) =>
+        sql`
+          INSERT INTO symbols_fts (symbol_id, name, signature, doc, tokens)
+          VALUES (
+            ${row.id},
+            ${row.name},
+            ${row.signature},
+            ${row.doc},
+            ${tokenizeIdentifier(`${row.name} ${row.qualifiedName}`)}
+          );
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to repopulate symbols_fts", cause: e })
+          )
+        ),
+      { concurrency: 1 }
     )
   }
 })

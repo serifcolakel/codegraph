@@ -12,13 +12,31 @@ export const SymbolKind = Schema.Literal(
 )
 export type SymbolKind = typeof SymbolKind.Type
 
+export const SymbolVisibility = Schema.Literal(
+  "public",
+  "private",
+  "protected",
+  "internal",
+  "package"
+)
+export type SymbolVisibility = typeof SymbolVisibility.Type
+
+export const ParseStatus = Schema.Literal("parsed", "partial", "skipped", "unsupported")
+export type ParseStatus = typeof ParseStatus.Type
+
 export const EdgeKind = Schema.Literal(
   "import",
   "call",
   "reference",
   "extends",
   "implements",
-  "contains"
+  "contains",
+  "imports",
+  "defines",
+  "call_reference",
+  "usage",
+  "throws",
+  "raises"
 )
 export type EdgeKind = typeof EdgeKind.Type
 
@@ -33,7 +51,9 @@ export const FileRecord = Schema.Struct({
   id: Schema.String,
   path: Schema.String,
   hash: Schema.String,
-  repoId: Schema.String
+  repoId: Schema.String,
+  language: Schema.optional(Schema.String),
+  parseStatus: Schema.optional(ParseStatus)
 })
 export type FileRecord = typeof FileRecord.Type
 
@@ -46,7 +66,11 @@ export const SymbolRecord = Schema.Struct({
   endLine: Schema.Number,
   signature: Schema.String,
   exported: Schema.Boolean,
-  doc: Schema.optional(Schema.String)
+  language: Schema.String,
+  qualifiedName: Schema.String,
+  doc: Schema.optional(Schema.String),
+  visibility: Schema.optional(SymbolVisibility),
+  containerName: Schema.optional(Schema.String)
 })
 export type SymbolRecord = typeof SymbolRecord.Type
 
@@ -66,6 +90,7 @@ export const ParsedSymbol = Schema.Struct({
   signature: Schema.String,
   exported: Schema.Boolean,
   doc: Schema.optional(Schema.String),
+  visibility: Schema.optional(SymbolVisibility),
   containerName: Schema.optional(Schema.String)
 })
 export type ParsedSymbol = typeof ParsedSymbol.Type
@@ -82,7 +107,8 @@ export type ParsedEdge = typeof ParsedEdge.Type
 export const ParsedFile = Schema.Struct({
   path: Schema.String,
   symbols: Schema.Array(ParsedSymbol),
-  edges: Schema.Array(ParsedEdge)
+  edges: Schema.Array(ParsedEdge),
+  parseStatus: Schema.optional(ParseStatus)
 })
 export type ParsedFile = typeof ParsedFile.Type
 
@@ -93,6 +119,25 @@ export const FileScanResult = Schema.Struct({
 })
 export type FileScanResult = typeof FileScanResult.Type
 
+export const ParseCoverage = Schema.Struct({
+  parsed: Schema.Number,
+  partial: Schema.Number,
+  skipped: Schema.Number,
+  unsupported: Schema.Number,
+  unknown: Schema.Number,
+  languages: Schema.Record({ key: Schema.String, value: Schema.Number })
+})
+export type ParseCoverage = typeof ParseCoverage.Type
+
+export const emptyParseCoverage = (): ParseCoverage => ({
+  parsed: 0,
+  partial: 0,
+  skipped: 0,
+  unsupported: 0,
+  unknown: 0,
+  languages: {}
+})
+
 export const IndexReport = Schema.Struct({
   repoId: Schema.String,
   repoName: Schema.String,
@@ -101,7 +146,8 @@ export const IndexReport = Schema.Struct({
   filesDeleted: Schema.Number,
   symbolsCount: Schema.Number,
   edgesCount: Schema.Number,
-  durationMs: Schema.Number
+  durationMs: Schema.Number,
+  coverage: ParseCoverage
 })
 export type IndexReport = typeof IndexReport.Type
 

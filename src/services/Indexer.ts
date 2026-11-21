@@ -117,6 +117,9 @@ export const IndexerLive = Layer.effect(
 
         const durationMs = Date.now() - startTime
         const stats = yield* store.getStats(repo.id)
+        const coverage = yield* store
+          .getCoverage(repo.id)
+          .pipe(Effect.withSpan("IndexStore.getCoverage"))
 
         yield* Effect.logInfo(
           `Indexing completed in ${durationMs}ms: ${stats.files} files, ${stats.symbols} symbols, ${stats.edges} edges (resolved ${resolvedEdgesCount} inter-file edges)`
@@ -130,7 +133,8 @@ export const IndexerLive = Layer.effect(
           filesDeleted: deletedFileIds.length,
           symbolsCount: stats.symbols,
           edgesCount: stats.edges,
-          durationMs
+          durationMs,
+          coverage
         }
       }).pipe(Effect.withSpan("Indexer.indexRepo"))
 
