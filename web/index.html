@@ -624,9 +624,15 @@
         border: 1px solid var(--line);
         background-color: var(--bg-elevated);
         background-image:
-          radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.11) 1px, transparent 0),
+          radial-gradient(
+            circle at 1px 1px,
+            rgba(148, 163, 184, 0.11) 1px,
+            transparent 0
+          ),
           linear-gradient(180deg, var(--surface), rgba(15, 23, 42, 0.12));
-        background-size: 24px 24px, auto;
+        background-size:
+          24px 24px,
+          auto;
         box-shadow:
           0 0 0 1px rgba(255, 255, 255, 0.02) inset,
           var(--shadow);
@@ -637,9 +643,15 @@
       [data-theme="light"] .graph-panel {
         background-color: #ffffff;
         background-image:
-          radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.09) 1px, transparent 0),
+          radial-gradient(
+            circle at 1px 1px,
+            rgba(15, 23, 42, 0.09) 1px,
+            transparent 0
+          ),
           linear-gradient(180deg, #ffffff, #f7f9ff);
-        background-size: 24px 24px, auto;
+        background-size:
+          24px 24px,
+          auto;
       }
 
       #cy {
@@ -1117,8 +1129,13 @@
       }
 
       .modal {
+        position: fixed;
+        inset: 0;
+        margin: auto;
         width: min(520px, calc(100vw - 32px));
         max-width: 100%;
+        height: fit-content;
+        max-height: calc(100vh - 32px);
         padding: 0;
         border: 1px solid var(--line-strong);
         border-radius: 20px;
@@ -1126,6 +1143,11 @@
         color: var(--text);
         box-shadow: 0 40px 120px -30px rgba(0, 0, 0, 0.85);
         overflow: hidden;
+      }
+
+      .modal[open] {
+        display: flex;
+        flex-direction: column;
       }
 
       .modal::backdrop {
@@ -1137,6 +1159,7 @@
       .modal form {
         display: flex;
         flex-direction: column;
+        max-height: inherit;
       }
 
       .modal-header {
@@ -1164,6 +1187,9 @@
         display: grid;
         gap: 14px;
         padding: 18px;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
       }
 
       .field {
@@ -1190,7 +1216,9 @@
         font: inherit;
         font-size: 0.83rem;
         outline: none;
-        transition: border-color 0.16s ease, box-shadow 0.16s ease;
+        transition:
+          border-color 0.16s ease,
+          box-shadow 0.16s ease;
       }
 
       .field input:focus {
@@ -1243,7 +1271,10 @@
         font-size: 0.8rem;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.16s ease, opacity 0.16s ease, background 0.16s ease;
+        transition:
+          transform 0.16s ease,
+          opacity 0.16s ease,
+          background 0.16s ease;
       }
 
       .primary-btn {
@@ -1340,7 +1371,8 @@
       <header>
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -1371,7 +1403,14 @@
             aria-label="Go back"
             disabled
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
               <path d="M19 12H5M11 18l-6-6 6-6" />
             </svg>
           </button>
@@ -1388,8 +1427,17 @@
             title="Index a repository"
             aria-label="Index a repository"
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path
+                d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"
+              />
               <path d="M12 11v6M9 14h6" />
             </svg>
           </button>
@@ -1401,7 +1449,14 @@
             title="Re-index current repository"
             aria-label="Re-index current repository"
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
               <path d="M20 11a8 8 0 1 0-2.3 5.7" />
               <path d="M20 5v6h-6" />
             </svg>
@@ -1439,7 +1494,8 @@
 
           <div class="search-box">
             <span class="search-icon" aria-hidden="true">
-              <svg aria-hidden="true"
+              <svg
+                aria-hidden="true"
                 width="15"
                 height="15"
                 viewBox="0 0 24 24"
@@ -1473,7 +1529,14 @@
 
           <div class="control slider-group">
             <label for="depthSlider">Depth <span id="depthVal">1</span></label>
-            <input type="range" id="depthSlider" min="1" max="8" value="1" title="BFS hops (max 8, capped at 500 nodes)" />
+            <input
+              type="range"
+              id="depthSlider"
+              min="1"
+              max="8"
+              value="1"
+              title="BFS hops (max 8, capped at 500 nodes)"
+            />
           </div>
 
           <button
@@ -1483,7 +1546,8 @@
             title="Fit graph to view"
             aria-label="Fit graph to view"
           >
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -1503,7 +1567,8 @@
             title="Toggle theme"
             aria-label="Toggle theme"
           >
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               class="icon-moon"
               viewBox="0 0 24 24"
               fill="none"
@@ -1513,7 +1578,8 @@
             >
               <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5Z" />
             </svg>
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               class="icon-sun"
               viewBox="0 0 24 24"
               fill="none"
@@ -1569,7 +1635,8 @@
         <aside class="side-panel" aria-label="Symbol details">
           <div id="panelEmpty" class="empty-state">
             <div class="empty-icon" aria-hidden="true">
-              <svg aria-hidden="true"
+              <svg
+                aria-hidden="true"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -1602,7 +1669,8 @@
                 title="Close details"
                 aria-label="Close details"
               >
-                <svg aria-hidden="true"
+                <svg
+                  aria-hidden="true"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -1653,11 +1721,26 @@
       <form id="indexForm">
         <div class="modal-header">
           <div>
-            <div id="indexModalTitle" class="modal-title">Index a repository</div>
+            <div id="indexModalTitle" class="modal-title">
+              Index a repository
+            </div>
             <div class="modal-sub">Point CodeGraph at any local folder.</div>
           </div>
-          <button type="button" id="indexCloseBtn" class="icon-btn" title="Close" aria-label="Close">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <button
+            type="button"
+            id="indexCloseBtn"
+            class="icon-btn"
+            title="Close"
+            aria-label="Close"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
               <path d="M6 6l12 12M18 6 6 18" />
             </svg>
           </button>
@@ -1678,7 +1761,12 @@
 
           <label class="field" for="indexName">
             <span>Display name (optional)</span>
-            <input id="indexName" name="name" autocomplete="off" placeholder="my-repo" />
+            <input
+              id="indexName"
+              name="name"
+              autocomplete="off"
+              placeholder="my-repo"
+            />
           </label>
 
           <label class="check-row" for="indexForce">
@@ -1690,8 +1778,12 @@
         </div>
 
         <div class="modal-footer">
-          <button type="button" id="indexCancelBtn" class="ghost-btn">Cancel</button>
-          <button type="submit" id="indexSubmitBtn" class="primary-btn">Index</button>
+          <button type="button" id="indexCancelBtn" class="ghost-btn">
+            Cancel
+          </button>
+          <button type="submit" id="indexSubmitBtn" class="primary-btn">
+            Index
+          </button>
         </div>
       </form>
     </dialog>
@@ -1833,8 +1925,7 @@
         const nodes = state.cy
           .nodes()
           .filter(
-            (node) =>
-              !node.data("isGroup") && node.style("display") !== "none",
+            (node) => !node.data("isGroup") && node.style("display") !== "none",
           ).length;
         const edges = state.cy
           .edges()
@@ -2014,7 +2105,9 @@
         state.cy.nodes().style({
           color: light ? "#10182b" : "#e8eeff",
           "text-outline-color": light ? "#ffffff" : "#070a12",
-          "border-color": light ? "rgba(15,23,42,0.18)" : "rgba(255,255,255,0.18)",
+          "border-color": light
+            ? "rgba(15,23,42,0.18)"
+            : "rgba(255,255,255,0.18)",
         });
       }
 
@@ -2095,7 +2188,9 @@
         state.cy.edges().forEach((edge) => {
           const source = edge.source();
           const target = edge.target();
-          const visible = Boolean(source && target && source.visible() && target.visible());
+          const visible = Boolean(
+            source && target && source.visible() && target.visible(),
+          );
           edge.style("display", visible ? "element" : "none");
         });
         updateVisibleStats();
@@ -2233,8 +2328,7 @@
 
         if (state.mode === "file" && elements.length > 0) {
           const fileElements = elements.filter(
-            (element) =>
-              element.data && typeof element.data.path === "string",
+            (element) => element.data && typeof element.data.path === "string",
           );
           const grouped = buildFileGroups(nodes, fileElements);
           elements.unshift(...grouped.groupElements);
@@ -2277,7 +2371,9 @@
         } else {
           cypher.layout(layoutOptions(nodes.length)).run();
         }
-        const visible = cypher.elements().filter((element) => element.visible());
+        const visible = cypher
+          .elements()
+          .filter((element) => element.visible());
         cypher.fit(visible.length > 0 ? visible : cypher.elements(), 48);
         updateVisibleStats();
       }
@@ -2632,11 +2728,27 @@
         }, 170);
       }
 
+      let indexNameAuto = true;
+
+      function nameFromPath(value) {
+        const parts = value
+          .trim()
+          .replace(/[\\/]+$/, "")
+          .split(/[\\/]/)
+          .filter(Boolean);
+        return parts.length > 0 ? parts[parts.length - 1] : "";
+      }
+
+      function syncAutoName() {
+        if (!indexNameAuto) return;
+        $("indexName").value = nameFromPath($("indexPath").value);
+      }
 
       function openIndexModal() {
         $("indexError").hidden = true;
         $("indexError").textContent = "";
         $("indexForm").reset();
+        indexNameAuto = true;
         const dialog = $("indexModal");
         if (typeof dialog.showModal === "function") dialog.showModal();
         else dialog.setAttribute("open", "");
@@ -2772,6 +2884,10 @@
       });
       $("indexCancelBtn").addEventListener("click", closeIndexModal);
       $("indexCloseBtn").addEventListener("click", closeIndexModal);
+      $("indexPath").addEventListener("input", syncAutoName);
+      $("indexName").addEventListener("input", () => {
+        indexNameAuto = false;
+      });
       $("indexForm").addEventListener("submit", (event) => {
         submitIndex(event).catch(() => {});
       });
@@ -2807,7 +2923,9 @@
       $("resetLayoutBtn").addEventListener("click", () => {
         if (!state.cy) return;
         state.cy.layout(layoutOptions(state.cy.nodes().length)).run();
-        const visible = state.cy.elements().filter((element) => element.visible());
+        const visible = state.cy
+          .elements()
+          .filter((element) => element.visible());
         state.cy.fit(visible.length > 0 ? visible : state.cy.elements(), 48);
       });
 
