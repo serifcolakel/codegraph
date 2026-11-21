@@ -9,7 +9,10 @@ import { ParserLive } from "../services/Parser.js"
 import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
 import { Indexer, IndexerLive } from "../services/Indexer.js"
 import { serveHttp } from "../http/index.js"
-import { GraphQueryLive } from "../services/GraphQuery.js"
+import { startMcpServer } from "../mcp/index.js"
+import { GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
+import { FileSystem, Path } from "@effect/platform"
+import { ManagedRuntime } from "effect"
 
 // 1. Index command
 const indexCommand = Command.make(
@@ -79,7 +82,11 @@ const serveCommand = Command.make(
 // 4. MCP command (Model Context Protocol stdio server)
 const mcpCommand = Command.make("mcp", {}, () =>
   Effect.gen(function* () {
-    yield* Console.log(`codegraph mcp: starting MCP server over stdio...`)
+    const store = yield* IndexStore
+    yield* store.initSchema()
+    const runtime = yield* Effect.runtime<IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path>()
+    const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
+    yield* Effect.promise(() => startMcpServer(managedRuntime))
   })
 )
 
