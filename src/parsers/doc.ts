@@ -21,7 +21,8 @@ export const trimDoc = (text: string): string => {
 export const leadingComment = (
   lines: readonly string[],
   startLineIndex: number,
-  commentPattern: RegExp
+  commentPattern: RegExp,
+  skipPattern?: RegExp
 ): string => {
   const collected: string[] = []
   let cursor = startLineIndex - 1
@@ -34,9 +35,23 @@ export const leadingComment = (
       }
       break
     }
+    if (skipPattern?.test(line)) {
+      cursor -= 1
+      continue
+    }
     if (!commentPattern.test(line)) break
     collected.unshift(line)
     cursor -= 1
   }
   return trimDoc(collected.join("\n").replace(/^\s*(?:\/\/+|#+|\/\*+|\*+)\s?/gm, ""))
+}
+
+// Returns the declaration header up to its body node, if any.
+export const headerOf = (node: { namedChildren: readonly { type: string; startIndex: number }[]; startIndex: number; text: string; childForFieldName?: (name: string) => { startIndex: number } | null }, bodyTypes: readonly string[]): string => {
+  const fieldBody = node.childForFieldName?.("body") ?? null
+  const body =
+    fieldBody ?? node.namedChildren.find((child) => bodyTypes.includes(child.type)) ?? undefined
+  const end = body ? body.startIndex : undefined
+  const raw = end === undefined ? node.text : node.text.slice(0, Math.max(0, end - node.startIndex))
+  return normalizeSignature(raw.replace(/:\s*$/, ""))
 }
