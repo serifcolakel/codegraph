@@ -1,5 +1,6 @@
 import type { Language } from "../domain/languages.js"
 import type { ParsedEdge, ParsedFile, ParsedSymbol, SymbolKind } from "../domain/models.js"
+import { withThrowsEdges } from "../parsers/throws.js"
 
 type MutableSymbol = { -readonly [K in keyof ParsedSymbol]: ParsedSymbol[K] }
 
@@ -1004,5 +1005,8 @@ export const parseGenericFile = (
         ? parseRuby(lines)
         : parseBraceLanguage(language, lines)
 
-  return { ...parsed, path: filePath, parseStatus: "partial" }
+  return withThrowsEdges(
+    { ...parsed, path: filePath, parseStatus: "partial" },
+    language === "ruby" ? "raises" : "throws"
+  )
 }

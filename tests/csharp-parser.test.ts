@@ -66,6 +66,14 @@ describe("C# tree-sitter parser", () => {
       expect(
         parsed.edges.some(
           (edge) =>
+            edge.kind === "throws" &&
+            edge.srcName === "FundService.Compare" &&
+            edge.dstName === "ArgumentException"
+        )
+      ).toBe(true)
+      expect(
+        parsed.edges.some(
+          (edge) =>
             edge.kind === "call" &&
             edge.srcName === "FundService.Compare" &&
             edge.dstName === "Helper"

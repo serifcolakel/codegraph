@@ -2,6 +2,7 @@ import Parser from "tree-sitter"
 import Java from "tree-sitter-java"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
 import { headerOf, leadingComment, normalizeSignature, trimDoc } from "./doc.js"
+import { withThrowsEdges } from "./throws.js"
 import type { SourceParser } from "./types.js"
 
 type Node = Parser.SyntaxNode
@@ -88,6 +89,16 @@ export const parseJavaFile: SourceParser["parse"] = (filePath, content) => {
     }
 
     addCallEdges(body, qualified, container)
+
+    const throwsClause = node.namedChildren.find((child) => child.type === "throws")
+    for (const thrown of throwsClause?.descendantsOfType("type_identifier") ?? []) {
+      addEdge({
+        srcName: qualified,
+        dstName: thrown.text,
+        kind: "throws",
+        srcLine: lineOf(node)
+      })
+    }
   }
 
   const addField = (node: Node, container: string) => {
@@ -213,10 +224,13 @@ export const parseJavaFile: SourceParser["parse"] = (filePath, content) => {
 
   symbols.sort((a, b) => a.startLine - b.startLine || a.name.localeCompare(b.name))
 
-  return {
-    path: filePath,
-    symbols,
-    edges,
-    parseStatus: root.hasError ? "partial" : "parsed"
-  }
+  return withThrowsEdges(
+    {
+      path: filePath,
+      symbols,
+      edges,
+      parseStatus: root.hasError ? "partial" : "parsed"
+    },
+    "throws"
+  )
 }

@@ -2,6 +2,7 @@ import Parser from "tree-sitter"
 import Python from "tree-sitter-python"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
 import { leadingComment, normalizeSignature, trimDoc } from "./doc.js"
+import { withThrowsEdges } from "./throws.js"
 import type { SourceParser } from "./types.js"
 
 type Node = Parser.SyntaxNode
@@ -249,10 +250,13 @@ export const parsePythonFile: SourceParser["parse"] = (filePath, content) => {
 
   symbols.sort((a, b) => a.startLine - b.startLine || a.name.localeCompare(b.name))
 
-  return {
-    path: filePath,
-    symbols,
-    edges,
-    parseStatus: root.hasError ? "partial" : "parsed"
-  }
+  return withThrowsEdges(
+    {
+      path: filePath,
+      symbols,
+      edges,
+      parseStatus: root.hasError ? "partial" : "parsed"
+    },
+    "raises"
+  )
 }

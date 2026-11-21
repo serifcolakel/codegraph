@@ -10,7 +10,10 @@ package demo
 class FundService : Base(), Compare {
     private val count = 0
 
-    /** Compares funds. */
+    /**
+     * Compares funds.
+     * @throws IllegalStateException when codes are empty.
+     */
     override fun compare(codes: List<String>): String {
         return helper(codes)
     }
@@ -68,6 +71,14 @@ describe("Kotlin tree-sitter parser", () => {
             edge.kind === "implements" &&
             edge.srcName === "FundService" &&
             edge.dstName === "Compare"
+        )
+      ).toBe(true)
+      expect(
+        parsed.edges.some(
+          (edge) =>
+            edge.kind === "throws" &&
+            edge.srcName === "FundService.compare" &&
+            edge.dstName === "IllegalStateException"
         )
       ).toBe(true)
       expect(

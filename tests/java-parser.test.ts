@@ -13,7 +13,7 @@ public class FundService extends Base implements Compare {
     private int count = 0;
 
     /** Compares funds. */
-    public String compare(List<String> codes) {
+    public String compare(List<String> codes) throws IOException {
         return helper(codes);
     }
 }
@@ -67,6 +67,14 @@ describe("Java tree-sitter parser", () => {
             edge.kind === "implements" &&
             edge.srcName === "FundService" &&
             edge.dstName === "Compare"
+        )
+      ).toBe(true)
+      expect(
+        parsed.edges.some(
+          (edge) =>
+            edge.kind === "throws" &&
+            edge.srcName === "FundService.compare" &&
+            edge.dstName === "IOException"
         )
       ).toBe(true)
       expect(

@@ -10,6 +10,7 @@ import type {
   SymbolVisibility
 } from "../domain/models.js"
 import { astParserFor } from "../parsers/index.js"
+import { withThrowsEdges } from "../parsers/throws.js"
 import { parseGenericFile } from "./GenericParser.js"
 
 export interface Parser {
@@ -531,12 +532,15 @@ export const ParserLive = Layer.succeed(Parser, {
           pushCallEdge(newExpr, newExpr.getExpression())
         }
 
-        return {
-          path: filePath,
-          symbols,
-          edges,
-          parseStatus: "parsed"
-        }
+        return withThrowsEdges(
+          {
+            path: filePath,
+            symbols,
+            edges,
+            parseStatus: "parsed"
+          },
+          "throws"
+        )
       },
       catch: (e) =>
         new ParseError({

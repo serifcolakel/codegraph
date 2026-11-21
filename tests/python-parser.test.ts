@@ -18,7 +18,10 @@ class FundService(Base):
     count = 0
 
     def compare(self, codes: List[str]) -> str:
-        """Compare funds."""
+        """Compare funds.
+
+        :raises ValueError: when codes are empty.
+        """
         return helper(codes)
 
     async def remote(self):
@@ -81,6 +84,14 @@ describe("Python tree-sitter parser", () => {
             edge.kind === "call" &&
             edge.srcName === "FundService.compare" &&
             edge.dstName === "helper"
+        )
+      ).toBe(true)
+      expect(
+        parsed.edges.some(
+          (edge) =>
+            edge.kind === "raises" &&
+            edge.srcName === "FundService.compare" &&
+            edge.dstName === "ValueError"
         )
       ).toBe(true)
     }).pipe(Effect.provide(ParserLive))
