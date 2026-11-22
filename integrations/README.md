@@ -16,6 +16,19 @@ Replace `/absolute/path/to/codegraph` with this repository (or an installed CLI)
 The database defaults to `.codegraph.sqlite` in the working directory; set
 `CODEGRAPH_DB_PATH` to keep one shared database.
 
+## MCP-first indexing
+
+Indexing is static: CodeGraph parses files and never executes the indexed
+project's scripts or tests. The cleanest setup is the MCP tool:
+
+1. Call `index_status`; if `stale=true`, call `index_repository` with the
+   repository path (`async=true` for large repos), then poll `index_job_status`.
+2. Keep `index_repository` in the agent's session-start instructions.
+
+The auto-index helper, plugins and git hooks below are optional conveniences for
+clients that cannot call MCP tools from hooks. They only invoke the CodeGraph
+CLI; they do not run project code. Skip them if you re-index through MCP.
+
 ## 1. Build and verify
 
 ```bash

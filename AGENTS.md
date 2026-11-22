@@ -10,6 +10,24 @@
 - Validate external and service boundary data with Effect `Schema` where applicable.
 - Keep the SQLite storage, parser, graph query, HTTP, MCP, and CLI responsibilities in their existing modules.
 
+## CodeGraph MCP Usage
+
+When a CodeGraph index exists, prefer MCP tools over `grep`/file search:
+
+1. `index_status` — check coverage/freshness; re-index only when `stale=true`.
+2. `search_graph` — find symbols by name, kind, file or degree; add `semantic: true` for intent search.
+3. `get_code_snippet` — read the exact source for one qualified name.
+4. `trace_path` — callers/callees and impact; use `search_code` only for literal text.
+5. `query_graph` — read-only Cypher subset for custom graph questions.
+6. `analyze_graph` — architecture, hotspots, dead code, cycles, duplicates.
+7. `detect_changes` — blast radius before finishing.
+
+- Always cite `file:line` from tool output and treat unresolved edges as unknown.
+- For large repositories use `index_repository` with `async=true`, then poll `index_job_status`.
+- Do not force a full re-index for normal work; incremental indexing skips unchanged hashes.
+- Keep MCP responses compact; prefer narrow filters and explicit limits over dumping the graph.
+- MCP, HTTP and CLI must read the same `CODEGRAPH_DB_PATH`.
+
 ## Build and Test
 
 - Install dependencies with `npm install` or `bun install`.

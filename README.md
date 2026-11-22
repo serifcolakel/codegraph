@@ -297,6 +297,33 @@ Codex (`config.toml` + `AGENTS.md`), Copilot (`.vscode/mcp.json` + folder-open
 task), opencode (`opencode.json` + plugin) and universal git hooks. All paths
 are local; set `CODEGRAPH_DB_PATH` to share one database.
 
+### Agent guidance (`AGENTS.md`)
+
+Add this block to `AGENTS.md`, `CLAUDE.md` or `copilot-instructions.md` so the
+agent prefers the graph over raw text search. The detailed workflow lives in
+[`.claude/skills/codegraph/SKILL.md`](.claude/skills/codegraph/SKILL.md).
+
+```markdown
+## CodeGraph
+
+A CodeGraph MCP server is available for this repository. Prefer it over grep
+when an index exists:
+
+1. `index_status` — verify coverage and freshness; re-index only if `stale=true`.
+2. `search_graph` — find symbols by name, kind, file or degree. Use
+   `semantic: true` for intent-based search.
+3. `get_code_snippet` — read the exact source for a qualified name.
+4. `trace_path` — callers, callees and impact. Use `search_code` only for
+   literal text.
+5. `query_graph` — read-only Cypher subset for custom questions.
+6. `analyze_graph` — architecture, hotspots, dead code, cycles, duplicates.
+7. `detect_changes` — blast radius before finishing.
+
+Rules: cite `file:line` from tool output; treat unresolved edges as unknown;
+use `index_repository(async=true)` plus `index_job_status` for large repos; do
+not force a full re-index for normal work.
+```
+
 ## Project layout
 
 ```
