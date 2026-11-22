@@ -16,6 +16,16 @@ public class FundService extends Base implements Compare {
     public String compare(List<String> codes) throws IOException {
         return helper(codes);
     }
+
+    public int summarize(int[] values) {
+        int total = 0;
+        for (int value : values) {
+            if (value > 0) {
+                total += value;
+            }
+        }
+        return total;
+    }
 }
 
 interface Compare {
@@ -49,6 +59,11 @@ describe("Java tree-sitter parser", () => {
       expect(compare?.signature).toContain("public String compare")
 
       expect(byName("FundService.count")?.visibility).toBe("private")
+
+      const summarize = byName("FundService.summarize")
+      expect(summarize?.cyclomatic).toBe(3)
+      expect(summarize?.loopDepth).toBe(1)
+      expect(summarize?.paramCount).toBe(1)
       expect(byName("Compare")?.kind).toBe("interface")
       expect(byName("Compare.compare")?.visibility).toBe("public")
       expect(byName("Mode")?.kind).toBe("enum")

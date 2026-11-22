@@ -50,6 +50,136 @@ const visibilityForScope = (scope: string | undefined): SymbolVisibility | undef
 const visibilityForDeclaration = (exported: boolean): SymbolVisibility =>
   exported ? "public" : "private"
 
+type ComplexityFields = Pick<
+  ParsedSymbol,
+  | "cyclomatic"
+  | "cognitive"
+  | "loopDepth"
+  | "loopCount"
+  | "linearScanInLoop"
+  | "allocInLoop"
+  | "recursive"
+  | "paramCount"
+>
+
+const SCAN_CALLS = new Set([
+  "find",
+  "findIndex",
+  "includes",
+  "indexOf",
+  "some",
+  "every",
+  "filter",
+  "contains"
+])
+const ALLOC_CALLS = new Set(["push", "unshift", "splice", "concat", "append", "add"])
+
+const isFunctionLike = (node: Node): boolean =>
+  Node.isFunctionDeclaration(node) ||
+  Node.isFunctionExpression(node) ||
+  Node.isArrowFunction(node) ||
+  Node.isMethodDeclaration(node) ||
+  Node.isGetAccessorDeclaration(node) ||
+  Node.isSetAccessorDeclaration(node) ||
+  Node.isConstructorDeclaration(node)
+
+const isLoop = (node: Node): boolean =>
+  Node.isForStatement(node) ||
+  Node.isForInStatement(node) ||
+  Node.isForOfStatement(node) ||
+  Node.isWhileStatement(node) ||
+  Node.isDoStatement(node)
+
+const complexityFor = (
+  body: Node | undefined,
+  name: string,
+  paramCount: number
+): ComplexityFields => {
+  if (!body) {
+    return { cyclomatic: 1, cognitive: 1, paramCount }
+  }
+
+  let cyclomatic = 1
+  let cognitive = 1
+  let loopCount = 0
+  let maxLoopDepth = 0
+  let linearScanInLoop = 0
+  let allocInLoop = 0
+  let recursive = false
+
+  const visit = (node: Node, loopDepth: number, controlDepth: number): void => {
+    if (node !== body && isFunctionLike(node)) return
+
+    let nextLoop = loopDepth
+    let nextControl = controlDepth
+
+    if (isLoop(node)) {
+      cyclomatic += 1
+      cognitive += 1 + controlDepth
+      loopCount += 1
+      nextLoop = loopDepth + 1
+      maxLoopDepth = Math.max(maxLoopDepth, nextLoop)
+      nextControl = controlDepth + 1
+    } else if (
+      Node.isIfStatement(node) ||
+      Node.isConditionalExpression(node) ||
+      Node.isCatchClause(node)
+    ) {
+      cyclomatic += 1
+      cognitive += 1 + controlDepth
+      nextControl = controlDepth + 1
+    } else if (Node.isCaseClause(node)) {
+      cyclomatic += 1
+      cognitive += 1 + controlDepth
+    } else if (Node.isBinaryExpression(node)) {
+      const operator = node.getOperatorToken().getText()
+      if (operator === "&&" || operator === "||" || operator === "??") {
+        cyclomatic += 1
+        cognitive += 1
+      }
+    }
+
+    if (Node.isCallExpression(node)) {
+      const expressionText = node.getExpression().getText()
+      if (expressionText === name || expressionText === `this.${name}`) {
+        recursive = true
+      }
+      if (loopDepth > 0) {
+        const callName = expressionText.split(".").pop() ?? expressionText
+        if (SCAN_CALLS.has(callName)) linearScanInLoop += 1
+        if (ALLOC_CALLS.has(callName)) allocInLoop += 1
+      }
+    }
+
+    if (loopDepth > 0) {
+      if (
+        Node.isNewExpression(node) ||
+        Node.isArrayLiteralExpression(node) ||
+        Node.isObjectLiteralExpression(node)
+      ) {
+        allocInLoop += 1
+      }
+    }
+
+    for (const child of node.getChildren()) {
+      visit(child, nextLoop, nextControl)
+    }
+  }
+
+  visit(body, 0, 0)
+
+  return {
+    cyclomatic,
+    cognitive,
+    loopDepth: maxLoopDepth,
+    loopCount,
+    linearScanInLoop,
+    allocInLoop,
+    recursive,
+    paramCount
+  }
+}
+
 type DocComment = {
   getCommentText(): string | undefined
   getTags(): ReadonlyArray<{ getText(): string }>
@@ -142,7 +272,8 @@ export const ParserLive = Layer.succeed(Parser, {
             signature,
             exported: fn.isExported(),
             visibility: visibilityForDeclaration(fn.isExported()),
-            doc: getDocText(fn)
+            doc: getDocText(fn),
+            ...complexityFor(fn.getBody(), name, fn.getParameters().length)
           })
         }
 
@@ -208,7 +339,8 @@ export const ParserLive = Layer.succeed(Parser, {
               visibility:
                 visibilityForScope(method.getScope()) ?? visibilityForDeclaration(cls.isExported()),
               doc: getDocText(method),
-              containerName: name
+              containerName: name,
+              ...complexityFor(method.getBody(), methodName, method.getParameters().length)
             })
 
             edges.push({
@@ -414,7 +546,14 @@ export const ParserLive = Layer.succeed(Parser, {
               signature,
               exported: isExported,
               visibility: visibilityForDeclaration(isExported),
-              doc: getDocText(varStmt)
+              doc: getDocText(varStmt),
+              ...(functionInitializer
+                ? complexityFor(
+                    functionInitializer.getBody(),
+                    name,
+                    functionInitializer.getParameters().length
+                  )
+                : {})
             })
           }
         }

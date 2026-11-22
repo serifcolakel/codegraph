@@ -1,6 +1,7 @@
 import Parser from "tree-sitter"
 import Go from "tree-sitter-go"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
+import { computeTreeComplexity } from "./complexity.js"
 import { headerOf, leadingComment, trimDoc } from "./doc.js"
 import type { SourceParser } from "./types.js"
 
@@ -194,6 +195,7 @@ export const parseGoFile: SourceParser["parse"] = (filePath, content) => {
     const qualified = containerName ? `${containerName}.${name}` : name
     const exported = isExported(name)
 
+    const params = node.childForFieldName("parameters")?.namedChildren.length ?? 0
     symbols.push({
       name: qualified,
       kind: receiver ? "method" : "function",
@@ -203,6 +205,7 @@ export const parseGoFile: SourceParser["parse"] = (filePath, content) => {
       exported,
       visibility: exported ? "public" : "package",
       doc: docAt(node.startPosition.row),
+      ...computeTreeComplexity(body, name, params),
       ...(containerName ? { containerName } : {})
     })
 

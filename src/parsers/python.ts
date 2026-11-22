@@ -1,6 +1,7 @@
 import Parser from "tree-sitter"
 import Python from "tree-sitter-python"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
+import { computeTreeComplexity } from "./complexity.js"
 import { leadingComment, normalizeSignature, trimDoc } from "./doc.js"
 import { withThrowsEdges } from "./throws.js"
 import type { SourceParser } from "./types.js"
@@ -163,6 +164,7 @@ export const parsePythonFile: SourceParser["parse"] = (filePath, content) => {
     const qualified = containerName ? `${containerName}.${name}` : name
     const exported = !name.startsWith("_")
 
+    const params = declaration.childForFieldName("parameters")?.namedChildren.length ?? 0
     symbols.push({
       name: qualified,
       kind: containerName ? "method" : "function",
@@ -172,6 +174,7 @@ export const parsePythonFile: SourceParser["parse"] = (filePath, content) => {
       exported,
       visibility: exported ? "public" : "private",
       doc: docFor(body, outer.startPosition.row),
+      ...computeTreeComplexity(body, name, params),
       ...(containerName ? { containerName } : {})
     })
 

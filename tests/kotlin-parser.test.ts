@@ -10,6 +10,16 @@ package demo
 class FundService : Base(), Compare {
     private val count = 0
 
+    fun summarize(values: List<Int>): Int {
+        var total = 0
+        for (value in values) {
+            if (value > 0) {
+                total += value
+            }
+        }
+        return total
+    }
+
     /**
      * Compares funds.
      * @throws IllegalStateException when codes are empty.
@@ -53,6 +63,11 @@ describe("Kotlin tree-sitter parser", () => {
       expect(compare?.signature).toContain("override fun compare")
 
       expect(byName("FundService.count")?.visibility).toBe("private")
+
+      const summarize = byName("FundService.summarize")
+      expect(summarize?.cyclomatic).toBe(3)
+      expect(summarize?.loopDepth).toBe(1)
+      expect(summarize?.paramCount).toBe(1)
       expect(byName("Compare")?.kind).toBe("interface")
       expect(byName("Registry")?.kind).toBe("class")
       expect(byName("Mode")?.kind).toBe("enum")

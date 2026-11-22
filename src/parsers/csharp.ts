@@ -1,6 +1,7 @@
 import Parser from "tree-sitter"
 import CSharp from "tree-sitter-c-sharp"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
+import { computeTreeComplexity } from "./complexity.js"
 import { headerOf, leadingComment, normalizeSignature, trimDoc } from "./doc.js"
 import { withThrowsEdges } from "./throws.js"
 import type { SourceParser } from "./types.js"
@@ -100,6 +101,8 @@ export const parseCsharpFile: SourceParser["parse"] = (filePath, content) => {
     const visibility = forcePublic ? "public" : visibilityOf(node, "private")
     const body = node.childForFieldName("body") ?? null
 
+    const params =
+      node.namedChildren.find((child) => child.type === "parameter_list")?.namedChildren.length ?? 0
     symbols.push({
       name: qualified,
       kind: container ? "method" : "function",
@@ -109,6 +112,7 @@ export const parseCsharpFile: SourceParser["parse"] = (filePath, content) => {
       exported: visibility === "public" || visibility === "protected",
       visibility,
       doc: docAt(node.startPosition.row),
+      ...computeTreeComplexity(body, name, params),
       ...(container ? { containerName: container } : {})
     })
 

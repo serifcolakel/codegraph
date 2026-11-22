@@ -311,12 +311,17 @@ export const IndexStoreLive = Layer.effect(
                 yield* sql`
                 INSERT INTO symbols (
                   id, name, kind, file_id, start_line, end_line, signature, exported, doc,
-                  language, qualified_name, visibility, container_name
+                  language, qualified_name, visibility, container_name,
+                  cyclomatic, cognitive, loop_depth, loop_count, linear_scan_in_loop,
+                  alloc_in_loop, recursive, param_count
                 )
                 VALUES (
                   ${symbolId}, ${sym.name}, ${sym.kind}, ${fileId}, ${sym.startLine}, ${sym.endLine},
                   ${sym.signature}, ${sym.exported ? 1 : 0}, ${sym.doc ?? ""},
-                  ${language}, ${qualifiedName}, ${sym.visibility ?? ""}, ${sym.containerName ?? ""}
+                  ${language}, ${qualifiedName}, ${sym.visibility ?? ""}, ${sym.containerName ?? ""},
+                  ${sym.cyclomatic ?? 1}, ${sym.cognitive ?? 1}, ${sym.loopDepth ?? 0},
+                  ${sym.loopCount ?? 0}, ${sym.linearScanInLoop ?? 0}, ${sym.allocInLoop ?? 0},
+                  ${sym.recursive ? 1 : 0}, ${sym.paramCount ?? 0}
                 );
               `
 

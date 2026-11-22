@@ -105,6 +105,14 @@ export const initSchema = Effect.gen(function* () {
       qualified_name TEXT NOT NULL DEFAULT '',
       visibility TEXT NOT NULL DEFAULT '',
       container_name TEXT NOT NULL DEFAULT '',
+      cyclomatic INTEGER NOT NULL DEFAULT 1,
+      cognitive INTEGER NOT NULL DEFAULT 1,
+      loop_depth INTEGER NOT NULL DEFAULT 0,
+      loop_count INTEGER NOT NULL DEFAULT 0,
+      linear_scan_in_loop INTEGER NOT NULL DEFAULT 0,
+      alloc_in_loop INTEGER NOT NULL DEFAULT 0,
+      recursive INTEGER NOT NULL DEFAULT 0,
+      param_count INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE
     );
   `.pipe(

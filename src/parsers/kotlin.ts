@@ -1,6 +1,7 @@
 import Parser from "tree-sitter"
 import Kotlin from "tree-sitter-kotlin"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
+import { computeTreeComplexity } from "./complexity.js"
 import { headerOf, leadingComment, normalizeSignature, trimDoc } from "./doc.js"
 import { withThrowsEdges } from "./throws.js"
 import type { SourceParser } from "./types.js"
@@ -77,6 +78,9 @@ export const parseKotlinFile: SourceParser["parse"] = (filePath, content) => {
     const visibility = visibilityOf(node)
     const body = node.namedChildren.find((child) => child.type === "function_body") ?? null
 
+    const params =
+      node.namedChildren.find((child) => child.type === "function_value_parameters")?.namedChildren
+        .length ?? 0
     symbols.push({
       name: qualified,
       kind: container ? "method" : "function",
@@ -86,6 +90,7 @@ export const parseKotlinFile: SourceParser["parse"] = (filePath, content) => {
       exported: visibility === "public" || visibility === "protected",
       visibility,
       doc: docAt(node.startPosition.row),
+      ...computeTreeComplexity(body, name, params),
       ...(container ? { containerName: container } : {})
     })
 

@@ -27,6 +27,13 @@ class FundService(Base):
     async def remote(self):
         pass
 
+def process(values):
+    total = 0
+    for value in values:
+        if value:
+            total += 1
+    return total
+
 def _hidden():
     pass
 
@@ -61,6 +68,11 @@ describe("Python tree-sitter parser", () => {
       expect(byName("FundService.count")?.kind).toBe("property")
       expect(byName("MAX_SIZE")?.kind).toBe("const")
       expect(byName("_hidden")?.visibility).toBe("private")
+
+      const process = byName("process")
+      expect(process?.cyclomatic).toBe(3)
+      expect(process?.loopDepth).toBe(1)
+      expect(process?.paramCount).toBe(1)
 
       expect(
         parsed.edges.some(

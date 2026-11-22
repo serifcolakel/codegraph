@@ -2,7 +2,7 @@ import * as SqlClient from "@effect/sql/SqlClient"
 import { Context, Effect, Layer } from "effect"
 import { StoreError } from "../domain/errors.js"
 
-export type RankingAlgorithm = "pagerank" | "in_degree"
+export type RankingAlgorithm = "pagerank" | "in_degree" | "complexity"
 export type CycleLevel = "symbol" | "file"
 
 export interface RankedSymbol {
@@ -14,6 +14,8 @@ export interface RankedSymbol {
   readonly score: number
   readonly inDegree: number
   readonly outDegree: number
+  readonly cyclomatic: number
+  readonly cognitive: number
 }
 
 export interface HotspotSymbol extends RankedSymbol {
@@ -72,6 +74,8 @@ interface SymbolRow {
   readonly startLine: number
   readonly language: string
   readonly exported: number
+  readonly cyclomatic: number
+  readonly cognitive: number
 }
 
 interface EdgeRow {
@@ -174,7 +178,8 @@ export const AnalyticsLive = Layer.effect(
     const loadSymbols = (repoId: string): Effect.Effect<readonly SymbolRow[], StoreError> =>
       sql<SymbolRow>`
         SELECT s.id, s.name, s.kind, f.path as filePath, s.start_line as startLine,
-               COALESCE(NULLIF(s.language, ''), 'unknown') as language, s.exported
+               COALESCE(NULLIF(s.language, ''), 'unknown') as language, s.exported,
+               s.cyclomatic, s.cognitive
         FROM symbols s
         JOIN files f ON s.file_id = f.id
         WHERE f.repo_id = ${repoId};
@@ -222,6 +227,10 @@ export const AnalyticsLive = Layer.effect(
         let scores: Map<string, number>
         if (options.algorithm === "in_degree") {
           scores = new Map(symbols.map((symbol) => [symbol.id, inDegree.get(symbol.id) ?? 0]))
+        } else if (options.algorithm === "complexity") {
+          scores = new Map(
+            symbols.map((symbol) => [symbol.id, symbol.cyclomatic * 10 + symbol.cognitive])
+          )
         } else {
           const damping = 0.85
           const nodeCount = symbols.length
@@ -263,7 +272,9 @@ export const AnalyticsLive = Layer.effect(
             startLine: symbol.startLine,
             score: Number((scores.get(symbol.id) ?? 0).toFixed(6)),
             inDegree: inDegree.get(symbol.id) ?? 0,
-            outDegree: outDegree.get(symbol.id) ?? 0
+            outDegree: outDegree.get(symbol.id) ?? 0,
+            cyclomatic: symbol.cyclomatic,
+            cognitive: symbol.cognitive
           }))
           .sort(
             (a, b) => b.score - a.score || b.inDegree - a.inDegree || a.name.localeCompare(b.name)
@@ -297,9 +308,11 @@ export const AnalyticsLive = Layer.effect(
               kind: symbol.kind,
               filePath: symbol.filePath,
               startLine: symbol.startLine,
-              score: incoming * 2 + outgoing,
+              score: incoming * 2 + outgoing + symbol.cyclomatic,
               inDegree: incoming,
               outDegree: outgoing,
+              cyclomatic: symbol.cyclomatic,
+              cognitive: symbol.cognitive,
               fanIn: incoming,
               fanOut: outgoing
             }

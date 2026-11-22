@@ -43,6 +43,14 @@ export function leaf(): number { return 1 }
 export function caller1(): number { return leaf() }
 export function caller2(): number { return leaf() }
 function dead(): number { return 42 }
+
+export function complex(values: number[]): number {
+  let total = 0;
+  for (const value of values) {
+    if (value > 0) total += complex(values);
+  }
+  return total;
+}
 `
         )
         yield* fs.writeFileString(
@@ -64,6 +72,11 @@ function dead(): number { return 42 }
         const inDegree = yield* analytics.rank(report.repoId, { algorithm: "in_degree" })
         expect(inDegree[0]?.name).toBe("leaf")
         expect(inDegree[0]?.score).toBe(2)
+
+        const complexRank = yield* analytics.rank(report.repoId, { algorithm: "complexity" })
+        const complexSymbol = complexRank.find((symbol) => symbol.name === "complex")
+        expect(complexSymbol?.cyclomatic).toBe(3)
+        expect(complexSymbol?.score).toBeGreaterThan(0)
 
         const hotspots = yield* analytics.hotspots(report.repoId, { limit: 5 })
         expect(hotspots[0]?.name).toBe("leaf")

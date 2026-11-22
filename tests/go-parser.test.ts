@@ -27,6 +27,16 @@ func (f *Fund) Compare(codes []string) string {
 
 func helper(codes []string) string { return fmt.Sprintf("%v", codes) }
 
+func summarize(values []int) int {
+  total := 0
+  for _, value := range values {
+    if value > 0 {
+      total += value
+    }
+  }
+  return total
+}
+
 type hidden struct{}
 `
 
@@ -58,6 +68,11 @@ describe("Go tree-sitter parser", () => {
       expect(compare?.signature).toContain("func (f *Fund) Compare")
 
       expect(byName("MaxSize")?.kind).toBe("const")
+
+      const summarize = byName("summarize")
+      expect(summarize?.cyclomatic).toBe(3)
+      expect(summarize?.loopDepth).toBe(1)
+      expect(summarize?.paramCount).toBe(1)
       expect(byName("hidden")?.visibility).toBe("package")
 
       expect(

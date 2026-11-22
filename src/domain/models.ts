@@ -72,7 +72,15 @@ export const SymbolRecord = Schema.Struct({
   qualifiedName: Schema.String,
   doc: Schema.optional(Schema.String),
   visibility: Schema.optional(SymbolVisibility),
-  containerName: Schema.optional(Schema.String)
+  containerName: Schema.optional(Schema.String),
+  cyclomatic: Schema.optional(Schema.Number),
+  cognitive: Schema.optional(Schema.Number),
+  loopDepth: Schema.optional(Schema.Number),
+  loopCount: Schema.optional(Schema.Number),
+  linearScanInLoop: Schema.optional(Schema.Number),
+  allocInLoop: Schema.optional(Schema.Number),
+  recursive: Schema.optional(Schema.Boolean),
+  paramCount: Schema.optional(Schema.Number)
 })
 export type SymbolRecord = typeof SymbolRecord.Type
 
@@ -93,7 +101,15 @@ export const ParsedSymbol = Schema.Struct({
   exported: Schema.Boolean,
   doc: Schema.optional(Schema.String),
   visibility: Schema.optional(SymbolVisibility),
-  containerName: Schema.optional(Schema.String)
+  containerName: Schema.optional(Schema.String),
+  cyclomatic: Schema.optional(Schema.Number),
+  cognitive: Schema.optional(Schema.Number),
+  loopDepth: Schema.optional(Schema.Number),
+  loopCount: Schema.optional(Schema.Number),
+  linearScanInLoop: Schema.optional(Schema.Number),
+  allocInLoop: Schema.optional(Schema.Number),
+  recursive: Schema.optional(Schema.Boolean),
+  paramCount: Schema.optional(Schema.Number)
 })
 export type ParsedSymbol = typeof ParsedSymbol.Type
 

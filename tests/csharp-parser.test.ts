@@ -14,6 +14,16 @@ namespace Demo {
     public string Compare(string[] codes) {
       return Helper(codes);
     }
+
+    public int Summarize(int[] values) {
+      int total = 0;
+      foreach (var value in values) {
+        if (value > 0) {
+          total += value;
+        }
+      }
+      return total;
+    }
   }
 
   public interface ICompare { string Compare(string[] codes); }
@@ -44,6 +54,11 @@ describe("C# tree-sitter parser", () => {
       expect(compare?.visibility).toBe("public")
 
       expect(byName("FundService.count")?.visibility).toBe("private")
+
+      const summarize = byName("FundService.Summarize")
+      expect(summarize?.cyclomatic).toBe(3)
+      expect(summarize?.loopDepth).toBe(1)
+      expect(summarize?.paramCount).toBe(1)
       expect(byName("ICompare")?.kind).toBe("interface")
       expect(byName("ICompare.Compare")?.visibility).toBe("public")
       expect(byName("Mode")?.kind).toBe("enum")

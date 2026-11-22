@@ -40,6 +40,14 @@ describe("query_graph language", () => {
 export function helper(value: number): number { return value }
 export function caller(): number { return helper(1) }
 export const LIMIT = 10
+
+export function risky(values: number[]): number {
+  let total = 0;
+  for (const value of values) {
+    if (value > 0) total += value;
+  }
+  return total;
+}
 `
         )
         yield* fs.writeFileString(
@@ -72,6 +80,11 @@ export class Service {
           `MATCH (b:Symbol)<-[e:CALLS]-(a:Symbol) WHERE b.name = "helper" RETURN a.name AS caller ORDER BY a.name`
         )
         expect(inbound.rows.map((row) => row.caller)).toContain("caller")
+
+        const complex = yield* language.execute(
+          `MATCH (s:Symbol) WHERE s.cyclomatic >= 3 RETURN s.name AS name, s.cyclomatic AS cx`
+        )
+        expect(complex.rows).toContainEqual({ name: "risky", cx: 3 })
 
         const files = yield* language.execute(
           `MATCH (f:File) WHERE f.path ENDS WITH ".ts" RETURN f.path AS path ORDER BY f.path`

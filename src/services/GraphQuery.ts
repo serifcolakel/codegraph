@@ -936,17 +936,21 @@ export const GraphQueryLive = Layer.effect(
       Effect.gen(function* () {
         const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\.\//, "")
         const rows = yield* sql<
-          Omit<SymbolRecord, "exported" | "visibility" | "containerName"> & {
+          Omit<SymbolRecord, "exported" | "visibility" | "containerName" | "recursive"> & {
             exported: number
             visibility: string
             containerName: string
+            recursive: number
           }
         >`
           SELECT s.id, s.name, s.kind, s.file_id as fileId,
                  s.start_line as startLine, s.end_line as endLine,
                  s.signature, s.exported as exported, s.doc,
                  s.language, s.qualified_name as qualifiedName,
-                 s.visibility, s.container_name as containerName
+                 s.visibility, s.container_name as containerName,
+                 s.cyclomatic, s.cognitive, s.loop_depth as loopDepth,
+                 s.loop_count as loopCount, s.linear_scan_in_loop as linearScanInLoop,
+                 s.alloc_in_loop as allocInLoop, s.recursive, s.param_count as paramCount
           FROM symbols s
           JOIN files f ON s.file_id = f.id
           JOIN repos r ON f.repo_id = r.id
@@ -968,7 +972,8 @@ export const GraphQueryLive = Layer.effect(
             row.visibility === "package"
               ? row.visibility
               : undefined,
-          containerName: row.containerName === "" ? undefined : row.containerName
+          containerName: row.containerName === "" ? undefined : row.containerName,
+          recursive: row.recursive === 1
         }))
       })
 

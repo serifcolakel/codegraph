@@ -117,7 +117,14 @@ export const ArchitectureInput = Schema.Struct({
 export type ArchitectureInput = typeof ArchitectureInput.Type
 
 export const AnalyzeGraphInput = Schema.Struct({
-  analysis: Schema.Literal("pagerank", "in_degree", "hotspots", "dead_code", "cycles"),
+  analysis: Schema.Literal(
+    "pagerank",
+    "in_degree",
+    "complexity",
+    "hotspots",
+    "dead_code",
+    "cycles"
+  ),
   repoId: Schema.optional(Schema.String),
   level: Schema.optional(Schema.Literal("symbol", "file")),
   limit: Schema.optional(Schema.Number)
@@ -317,7 +324,7 @@ export const createMcpServer = <R>(
             properties: {
               analysis: {
                 type: "string",
-                enum: ["pagerank", "in_degree", "hotspots", "dead_code", "cycles"]
+                enum: ["pagerank", "in_degree", "complexity", "hotspots", "dead_code", "cycles"]
               },
               repoId: { type: "string", description: "Optional repo ID" },
               level: { type: "string", enum: ["symbol", "file"], description: "Cycle level" },
@@ -815,13 +822,18 @@ export const createMcpServer = <R>(
                 const body = results
                   .map(
                     (symbol, index) =>
-                      `${index + 1}. ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} score=${symbol.score} fanIn=${symbol.fanIn} fanOut=${symbol.fanOut}`
+                      `${index + 1}. ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} score=${symbol.score} fanIn=${symbol.fanIn} fanOut=${symbol.fanOut} cx=${symbol.cyclomatic} cog=${symbol.cognitive}`
                   )
                   .join("\n")
                 return `${header}\n${results.length} hotspot(s)\n\n${body || "none"}`
               }
 
-              const algorithm = args.analysis === "in_degree" ? "in_degree" : "pagerank"
+              const algorithm =
+                args.analysis === "in_degree"
+                  ? "in_degree"
+                  : args.analysis === "complexity"
+                    ? "complexity"
+                    : "pagerank"
               const results = yield* analytics.rank(repoId, {
                 algorithm,
                 ...(args.limit !== undefined ? { limit: args.limit } : {})
@@ -829,7 +841,7 @@ export const createMcpServer = <R>(
               const body = results
                 .map(
                   (symbol, index) =>
-                    `${index + 1}. ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} score=${symbol.score} in=${symbol.inDegree} out=${symbol.outDegree}`
+                    `${index + 1}. ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} score=${symbol.score} in=${symbol.inDegree} out=${symbol.outDegree} cx=${symbol.cyclomatic} cog=${symbol.cognitive}`
                 )
                 .join("\n")
               return `${header}\n${results.length} result(s)\n\n${body || "none"}`

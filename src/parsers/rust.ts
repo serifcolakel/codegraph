@@ -1,6 +1,7 @@
 import Parser from "tree-sitter"
 import Rust from "tree-sitter-rust"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
+import { computeTreeComplexity } from "./complexity.js"
 import { headerOf, leadingComment, normalizeSignature, trimDoc } from "./doc.js"
 import type { SourceParser } from "./types.js"
 
@@ -137,6 +138,7 @@ export const parseRustFile: SourceParser["parse"] = (filePath, content) => {
     const visibility = visibilityOf(node)
     const body = node.childForFieldName("body") ?? null
 
+    const params = node.childForFieldName("parameters")?.namedChildren.length ?? 0
     symbols.push({
       name: qualified,
       kind: container ? "method" : "function",
@@ -146,6 +148,7 @@ export const parseRustFile: SourceParser["parse"] = (filePath, content) => {
       exported: visibility === "public",
       visibility,
       doc: docAt(node.startPosition.row),
+      ...computeTreeComplexity(body, name, params),
       ...(container ? { containerName: container } : {})
     })
 

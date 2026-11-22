@@ -1,6 +1,7 @@
 import Parser from "tree-sitter"
 import Java from "tree-sitter-java"
 import type { ParsedEdge, ParsedSymbol } from "../domain/models.js"
+import { computeTreeComplexity } from "./complexity.js"
 import { headerOf, leadingComment, normalizeSignature, trimDoc } from "./doc.js"
 import { withThrowsEdges } from "./throws.js"
 import type { SourceParser } from "./types.js"
@@ -72,6 +73,7 @@ export const parseJavaFile: SourceParser["parse"] = (filePath, content) => {
     const visibility = forcePublic ? "public" : visibilityOf(node, "package")
     const body = node.childForFieldName("body") ?? null
 
+    const params = node.childForFieldName("parameters")?.namedChildren.length ?? 0
     symbols.push({
       name: qualified,
       kind: container ? "method" : "function",
@@ -81,6 +83,7 @@ export const parseJavaFile: SourceParser["parse"] = (filePath, content) => {
       exported: visibility === "public" || visibility === "protected",
       visibility,
       doc: docAt(node.startPosition.row),
+      ...computeTreeComplexity(body, name, params),
       ...(container ? { containerName: container } : {})
     })
 

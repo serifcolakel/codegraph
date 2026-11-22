@@ -38,6 +38,14 @@ export class FundStore {
     this.sizes.length = 0;
   }
 }
+
+export function score(values: number[]): number {
+  let total = 0;
+  for (const value of values) {
+    if (value > 0) total += value;
+  }
+  return total;
+}
 `
         )
         yield* fs.writeFileString(
@@ -84,6 +92,11 @@ class FundService:
 
         const privateField = outline.find((s) => s.name === "FundStore.sizes")
         expect(privateField?.visibility).toBe("private")
+
+        const score = outline.find((s) => s.name === "score")
+        expect(score?.cyclomatic).toBe(3)
+        expect(score?.loopDepth).toBe(1)
+        expect(score?.paramCount).toBe(1)
 
         const pythonOutline = yield* query.outlineFile(report.repoId, "service.py")
         const pythonMethod = pythonOutline.find((s) => s.name === "FundService.compare")

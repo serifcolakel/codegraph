@@ -31,6 +31,16 @@ impl Compare for FundService {
 pub fn helper(codes: &[String]) -> String {
     codes.join(",")
 }
+
+pub fn summarize(values: &[i32]) -> i32 {
+    let mut total = 0;
+    for value in values {
+        if *value > 0 {
+            total += *value;
+        }
+    }
+    total
+}
 `
 
 describe("Rust tree-sitter parser", () => {
@@ -53,6 +63,11 @@ describe("Rust tree-sitter parser", () => {
       expect(byName("Mode")?.kind).toBe("enum")
       expect(byName("Mode.Fast")?.kind).toBe("property")
       expect(byName("Compare")?.kind).toBe("interface")
+
+      const summarize = byName("summarize")
+      expect(summarize?.cyclomatic).toBe(3)
+      expect(summarize?.loopDepth).toBe(1)
+      expect(summarize?.paramCount).toBe(1)
 
       const compare = byName("FundService.compare")
       expect(compare?.kind).toBe("method")
