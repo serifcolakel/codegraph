@@ -30,8 +30,8 @@ Implemented and verified:
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command,
   `index_status` MCP tool).
 - Analytics service: PageRank/in-degree/complexity, package rankings,
-  communities, hotspots, dead-code candidates and symbol/file/package cycle
-  detection via `analyze_graph`.
+  communities, hotspots, dead-code candidates, symbol/file/package cycle
+  detection and snapshot comparison.
 - Complexity metrics computed for TS/JS and tree-sitter languages and stored on
   symbols.
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
@@ -50,10 +50,10 @@ Implemented and verified:
     and git change impact; rows jump to the graph.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 20 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
-  `query_graph`, `analyze_graph`, `get_architecture`, `trace_path`, `detect_changes`,
-  `index_repository`, `index_job_status`, `delete_project`, `list_projects`,
-  `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
+- MCP server with 21 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
+  `query_graph`, `analyze_graph`, `compare_snapshots`, `get_architecture`, `trace_path`,
+  `detect_changes`, `index_repository`, `index_job_status`, `delete_project`,
+  `list_projects`, `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
   `get_code_snippet`, `search_code`, `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
@@ -122,7 +122,7 @@ Make the MCP server useful for real repository investigations.
 - [x] Hotspot ranking from fan-in, fan-out and complexity signals.
 - [x] Complexity fields: cyclomatic, cognitive, loop depth, allocation/scan-in-loop signals.
 - [x] Git-aware change impact: changed files → symbols → reverse dependencies.
-- [ ] Snapshot comparison between two index runs.
+- [x] Snapshot comparison between two index runs.
 - [x] UI views for architecture, hotspots, complexity, dead code, cycles and change impact (Insights dialog).
 
 ### Phase 4 — Search and semantics (P1)

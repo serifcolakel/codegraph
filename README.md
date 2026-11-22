@@ -19,8 +19,8 @@ MCP server.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Graph analytics: PageRank/in-degree/complexity ranking, package rankings,
-  hotspots, communities, dead-code candidates and symbol/file/package cycle
-  detection (`analyze_graph` MCP tool).
+  hotspots, communities, dead-code candidates, symbol/file/package cycle
+  detection (`analyze_graph`) and index snapshot comparison.
 - Complexity metrics: cyclomatic, cognitive, loop depth/count, scan/allocation
   inside loops, recursion and parameter count for TS/JS and tree-sitter
   languages.
@@ -37,7 +37,8 @@ MCP server.
   source size, file/symbol/edge counts. An **Index details** dialog shows
   languages, parse coverage, import resolution and recent indexing jobs. An
   **Insights** dialog surfaces architecture, hotspots, complexity, communities,
-  packages, dead code, cycles and change impact, with click-through to the graph.
+  packages, dead code, cycles, change impact and snapshot deltas, with
+  click-through to the graph.
 - HTTP JSON API and an MCP stdio server.
 - Optional watch mode that re-indexes on change (debounced).
 
@@ -113,6 +114,8 @@ configured ignore globs.
 | `GET /api/architecture?repo=`                   | Languages, packages, entry points, hotspots |
 | `GET /api/analytics?repo=&analysis=`            | Ranking, hotspots, communities, dead code   |
 | `GET /api/changes?repo=&base=`                  | Git change impact and blast radius          |
+| `GET /api/snapshots?repo=&limit=`               | Recent index snapshots                      |
+| `GET /api/snapshots/compare?repo=&from=&to=`    | Delta between two index runs                |
 | `GET /api/graph?repo=&level=file`               | File-level import/call graph                |
 | `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)             |
 | `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                         |
@@ -132,7 +135,7 @@ The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
 `index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
 `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `query_graph`,
-`analyze_graph`, and `read_file_range`.
+`analyze_graph`, `compare_snapshots`, and `read_file_range`.
 
 `query_graph` accepts a safe, read-only Cypher subset:
 
