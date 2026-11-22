@@ -18,6 +18,8 @@ MCP server.
   type-only imports stay visible.
 - Markdown documentation: headings become `doc` symbols and inline code spans
   resolve to `mentions` edges pointing at code.
+- Route nodes for Next.js app/pages routes, Express-style declarations and
+  FastAPI decorators, linked to their handler symbols.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Graph analytics: PageRank/in-degree/complexity ranking, package rankings,

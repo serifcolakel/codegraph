@@ -35,6 +35,7 @@ Implemented and verified:
 - Complexity metrics computed for TS/JS and tree-sitter languages and stored on
   symbols.
 - Markdown headings indexed as `doc` symbols with resolved `mentions` edges.
+- Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
 - Graph queries: search, symbol details, references, outline, neighborhood, repo map, file graph.
 - HTTP API with indexing actions:
@@ -137,7 +138,7 @@ Make the MCP server useful for real repository investigations.
 
 ### Phase 5 — System context (P2)
 
-- [ ] Route nodes for framework conventions (file-based routing and explicit route declarations).
+- [x] Route nodes for Next.js file-based routing, Express-style declarations and FastAPI decorators.
 - [ ] Channel edges for event emitters, pub/sub and message queues where statically resolvable.
 - [x] Documentation sections: Markdown headings as graph nodes with `MENTIONS` links to code.
 - [ ] Architecture decision records stored with the index.
