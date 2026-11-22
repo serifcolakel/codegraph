@@ -45,6 +45,8 @@ Implemented and verified:
     compact repo/search/depth overlay.
   - Metadata stat cards with last index time, duration, source size and repo counts.
   - Index details dialog with languages, coverage, imports and recent jobs.
+  - Insights dialog with architecture, hotspots, complexity, dead code, cycles
+    and git change impact; rows jump to the graph.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
 - MCP server with 20 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
@@ -120,7 +122,7 @@ Make the MCP server useful for real repository investigations.
 - [x] Complexity fields: cyclomatic, cognitive, loop depth, allocation/scan-in-loop signals.
 - [x] Git-aware change impact: changed files → symbols → reverse dependencies.
 - [ ] Snapshot comparison between two index runs.
-- [ ] UI views for architecture, hotspots, dead code and change impact.
+- [x] UI views for architecture, hotspots, complexity, dead code, cycles and change impact (Insights dialog).
 
 ### Phase 4 — Search and semantics (P1)
 
