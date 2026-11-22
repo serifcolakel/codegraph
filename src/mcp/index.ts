@@ -15,6 +15,7 @@ import { Indexer } from "../services/Indexer.js"
 import { IndexJobRunner } from "../services/IndexJobRunner.js"
 import { IndexJobs } from "../services/IndexJobs.js"
 import { IndexStore } from "../services/IndexStore.js"
+import { QueryLanguage } from "../services/QueryLanguage.js"
 
 const docSnippet = (doc?: string): string =>
   doc ? doc.replace(/\s+/g, " ").trim().slice(0, 180) : ""
@@ -114,6 +115,13 @@ export const ArchitectureInput = Schema.Struct({
 })
 export type ArchitectureInput = typeof ArchitectureInput.Type
 
+export const QueryGraphInput = Schema.Struct({
+  query: Schema.String,
+  repoId: Schema.optional(Schema.String),
+  limit: Schema.optional(Schema.Number)
+})
+export type QueryGraphInput = typeof QueryGraphInput.Type
+
 export const SearchGraphInput = Schema.Struct({
   namePattern: Schema.optional(Schema.String),
   regex: Schema.optional(Schema.Boolean),
@@ -147,6 +155,7 @@ export const createMcpServer = <R>(
     | Indexer
     | IndexJobs
     | IndexJobRunner
+    | QueryLanguage
     | FileSystem.FileSystem
     | Path.Path
     | R,
@@ -288,6 +297,24 @@ export const createMcpServer = <R>(
           name: "list_projects",
           description: "Lists indexed repositories with their IDs, roots and index counts.",
           inputSchema: { type: "object", properties: {} }
+        },
+        {
+          name: "query_graph",
+          description:
+            "Runs a safe read-only Cypher subset over indexed Symbols, Files and Repositories.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              query: {
+                type: "string",
+                description:
+                  'e.g. MATCH (s:Symbol) WHERE s.kind = "function" RETURN s.name, s.filePath LIMIT 20'
+              },
+              repoId: { type: "string", description: "Optional repo scope" },
+              limit: { type: "number", description: "Row cap (max 500)" }
+            },
+            required: ["query"]
+          }
         },
         {
           name: "search_graph",
@@ -711,6 +738,29 @@ export const createMcpServer = <R>(
           return { content: [{ type: "text", text }] }
         }
 
+        case "query_graph": {
+          const args = Schema.decodeUnknownSync(QueryGraphInput)(rawArgs ?? {})
+          const result = await runtime.runPromise(
+            Effect.gen(function* () {
+              const language = yield* QueryLanguage
+              return yield* language.execute(args.query, {
+                ...(args.repoId !== undefined ? { repoId: args.repoId } : {}),
+                ...(args.limit !== undefined ? { limit: args.limit } : {})
+              })
+            })
+          )
+          const header = `${result.returned} of ${result.total} rows${result.truncated ? " · truncated=true" : ""}`
+          const body = result.rows.map((row) => JSON.stringify(row)).join("\n")
+          return {
+            content: [
+              {
+                type: "text",
+                text: `columns: ${result.columns.join(", ")}\n${header}\n${body || "(no rows)"}`
+              }
+            ]
+          }
+        }
+
         case "search_graph": {
           const args = Schema.decodeUnknownSync(SearchGraphInput)(rawArgs ?? {})
           const result = await runtime.runPromise(
@@ -1011,6 +1061,7 @@ export const startMcpServer = <R>(
     | Indexer
     | IndexJobs
     | IndexJobRunner
+    | QueryLanguage
     | FileSystem.FileSystem
     | Path.Path
     | R,

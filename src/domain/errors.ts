@@ -30,3 +30,8 @@ export class GitError extends Data.TaggedError("GitError")<{
   readonly message: string
   readonly cause?: unknown
 }> {}
+
+export class QueryLanguageError extends Data.TaggedError("QueryLanguageError")<{
+  readonly message: string
+  readonly position?: number
+}> {}

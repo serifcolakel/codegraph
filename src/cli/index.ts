@@ -17,6 +17,7 @@ import { type IndexJobRunner, IndexJobRunnerLive } from "../services/IndexJobRun
 import { type IndexJobs, IndexJobsLive } from "../services/IndexJobs.js"
 import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
 import { ParserLive } from "../services/Parser.js"
+import { type QueryLanguage, QueryLanguageLive } from "../services/QueryLanguage.js"
 
 // 1. Index command
 const indexCommand = Command.make(
@@ -191,6 +192,7 @@ const mcpCommand = Command.make("mcp", {}, () =>
       | Indexer
       | IndexJobs
       | IndexJobRunner
+      | QueryLanguage
       | FileSystem.FileSystem
       | Path.Path
     >()
@@ -223,6 +225,7 @@ export const MainLive = Layer.unwrapEffect(
     const SqlLive = Sqlite.SqliteClient.layer({ filename: config.dbPath })
     const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
     const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
+    const QueryLanguageServiceLive = QueryLanguageLive.pipe(Layer.provide(SqlLive))
     const DiagnosticsServiceLive = DiagnosticsLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
     )
@@ -243,6 +246,7 @@ export const MainLive = Layer.unwrapEffect(
       ParserLive,
       IndexerServiceLive,
       IndexJobsServiceLive,
+      QueryLanguageServiceLive,
       IndexJobRunnerLive.pipe(
         Layer.provide(Layer.mergeAll(IndexJobsServiceLive, IndexerServiceLive))
       ),

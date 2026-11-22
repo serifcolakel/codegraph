@@ -16,6 +16,7 @@ import { type IndexJobRunner, IndexJobRunnerLive } from "../src/services/IndexJo
 import { type IndexJobs, IndexJobsLive } from "../src/services/IndexJobs.js"
 import { type IndexStore, IndexStoreLive } from "../src/services/IndexStore.js"
 import { ParserLive } from "../src/services/Parser.js"
+import { type QueryLanguage, QueryLanguageLive } from "../src/services/QueryLanguage.js"
 
 describe("MCP server tools", () => {
   it.live("handles MCP tool requests backed by Effect services", () =>
@@ -68,6 +69,7 @@ export function top(): string {
           | Indexer
           | IndexJobs
           | IndexJobRunner
+          | QueryLanguage
           | FileSystem.FileSystem
           | Path.Path
         >()
@@ -108,6 +110,7 @@ export function top(): string {
         expect(toolNames).toContain("index_job_status")
         expect(toolNames).toContain("delete_project")
         expect(toolNames).toContain("search_graph")
+        expect(toolNames).toContain("query_graph")
         expect(toolNames).toContain("get_architecture")
         expect(toolNames).toContain("trace_path")
         expect(toolNames).toContain("detect_changes")
@@ -206,7 +209,15 @@ export function top(): string {
         expect(projectsResult.content[0]?.text).toContain("mcp-test-repo")
         expect(projectsResult.content[0]?.text).toContain(report.repoId)
 
-        // 12. Test search_graph with regex, kind filter and paging
+        // 12. Test query_graph
+        const queryGraphResult = yield* callTool("query_graph", {
+          query: `MATCH (s:Symbol) WHERE s.name CONTAINS "Data" RETURN s.name AS name, s.filePath AS file ORDER BY s.name LIMIT 5`,
+          repoId: report.repoId
+        })
+        expect(queryGraphResult.content[0]?.text).toContain("columns: name, file")
+        expect(queryGraphResult.content[0]?.text).toContain("MemoryDataService")
+
+        // 13. Test search_graph with regex, kind filter and paging
         const graphSearch = yield* callTool("search_graph", {
           namePattern: "Memory.*",
           regex: true,
@@ -225,12 +236,12 @@ export function top(): string {
         })
         expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
 
-        // 13. Test get_graph_schema
+        // 14. Test get_graph_schema
         const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
-        // 14. Test get_code_snippet by qualified name
+        // 15. Test get_code_snippet by qualified name
         const snippetResult = yield* callTool("get_code_snippet", {
           qualifiedName: "service.MemoryDataService",
           repoId: report.repoId
@@ -245,14 +256,14 @@ export function top(): string {
         })
         expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
 
-        // 15. Test search_code
+        // 16. Test search_code
         const searchCodeResult = yield* callTool("search_code", {
           query: "MemoryDataService",
           repoId: report.repoId
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 16. Test read_file_range
+        // 17. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
@@ -262,7 +273,7 @@ export function top(): string {
         expect(readRangeResult.content[0]?.text).toContain("1 |")
         expect(readRangeResult.content[0]?.text).toContain("DataService")
 
-        // 17. Test delete_project
+        // 18. Test delete_project
         const deleteResult = yield* callTool("delete_project", { repoId: report.repoId })
         expect(deleteResult.content[0]?.text).toContain("Deleted index")
         const projectsAfterDelete = yield* callTool("list_projects", {})
@@ -277,6 +288,7 @@ export function top(): string {
           const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
           const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
           const JobsLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
+          const LanguageLive = QueryLanguageLive.pipe(Layer.provide(SqlLive))
           const DiagnosticsServiceLive = DiagnosticsLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
           )
@@ -299,6 +311,7 @@ export function top(): string {
             ChangeImpactServiceLive,
             JobsLive,
             RunnerLive,
+            LanguageLive,
             PlatformLive
           )
         })()
