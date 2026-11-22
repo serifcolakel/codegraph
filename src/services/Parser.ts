@@ -532,6 +532,78 @@ export const ParserLive = Layer.succeed(Parser, {
           pushCallEdge(newExpr, newExpr.getExpression())
         }
 
+        // 9. Reference edges: callbacks passed without invocation and non-call
+        // usages of local declarations. Only identifiers whose text matches a
+        // symbol declared in this file are considered, and the resolved
+        // declaration must be the same node, which keeps shadowed names and
+        // property keys out.
+        const localByName = new Map<string, ParsedSymbol[]>()
+        for (const symbol of symbols) {
+          const baseName = symbol.name.split(".").pop()
+          if (!baseName) continue
+          const list = localByName.get(baseName) ?? []
+          list.push(symbol)
+          localByName.set(baseName, list)
+        }
+
+        const referenceKeys = new Set(
+          edges.map((edge) => `${edge.srcName}->${edge.dstName}:${edge.kind}`)
+        )
+
+        const isDeclarationName = (identifier: Node, parent: Node | undefined): boolean => {
+          if (!parent) return false
+          if (Node.isCallExpression(parent) && parent.getExpression() === identifier) return true
+          if (Node.isNewExpression(parent) && parent.getExpression() === identifier) return true
+          if (Node.isImportDeclaration(parent)) return true
+          if (Node.isImportSpecifier(parent)) return true
+          if (Node.isImportClause(parent)) return true
+          if (Node.isNamespaceImport(parent)) return true
+          if (
+            Node.isPropertyAccessExpression(parent) ||
+            Node.isPropertyAssignment(parent) ||
+            Node.isPropertyDeclaration(parent) ||
+            Node.isMethodDeclaration(parent) ||
+            Node.isFunctionDeclaration(parent) ||
+            Node.isClassDeclaration(parent) ||
+            Node.isInterfaceDeclaration(parent) ||
+            Node.isTypeAliasDeclaration(parent) ||
+            Node.isEnumDeclaration(parent) ||
+            Node.isEnumMember(parent) ||
+            Node.isVariableDeclaration(parent)
+          ) {
+            return parent.getNameNode() === identifier
+          }
+          return false
+        }
+
+        for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+          const candidates = localByName.get(identifier.getText())
+          if (!candidates) continue
+          if (isDeclarationName(identifier, identifier.getParent())) continue
+
+          const declaration = identifier.getSymbol()?.getDeclarations()[0]
+          if (!declaration || declaration.getSourceFile() !== sourceFile) continue
+
+          const declarationLine = declaration.getStartLineNumber()
+          const target = candidates.find((symbol) => symbol.startLine === declarationLine)
+          if (!target) continue
+
+          const enclosing = findEnclosingSymbol(identifier)
+          if (!enclosing || enclosing === target.name) continue
+
+          const kind: "call_reference" | "usage" =
+            target.kind === "function" || target.kind === "method" ? "call_reference" : "usage"
+          const key = `${enclosing}->${target.name}:${kind}`
+          if (referenceKeys.has(key)) continue
+          referenceKeys.add(key)
+          edges.push({
+            srcName: enclosing,
+            dstName: target.name,
+            kind,
+            srcLine: identifier.getStartLineNumber()
+          })
+        }
+
         return withThrowsEdges(
           {
             path: filePath,
