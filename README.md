@@ -18,8 +18,11 @@ MCP server.
   type-only imports stay visible.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
-- Graph analytics: PageRank/in-degree ranking, hotspots, dead-code candidates
-  and symbol/file cycle detection (`analyze_graph` MCP tool).
+- Graph analytics: PageRank/in-degree/complexity ranking, hotspots, dead-code
+  candidates and symbol/file cycle detection (`analyze_graph` MCP tool).
+- Complexity metrics: cyclomatic, cognitive, loop depth/count, scan/allocation
+  inside loops, recursion and parameter count for TS/JS and tree-sitter
+  languages.
 - Documentation indexing: JSDoc, `///` / `/** */` block docs and Python
   docstrings are stored with symbols and included in full-text search.
 - Module-aware cross-file edge resolution using relative paths and workspace
@@ -142,6 +145,9 @@ WHERE a.name = "handler"
 RETURN a.name AS caller, b.name AS callee
 LIMIT 50
 ```
+
+Symbol properties include `cyclomatic`, `cognitive`, `loopDepth`, `loopCount`,
+`linearScanInLoop`, `allocInLoop`, `recursive` and `paramCount`.
 
 Supported node labels are `Symbol`, `File` and `Repository`; relationship
 patterns support Symbol-to-Symbol edges (`CALLS`, `CALL_REFERENCE`, `USAGE`,

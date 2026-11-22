@@ -29,8 +29,10 @@ Implemented and verified:
   and `pyproject.toml`.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command,
   `index_status` MCP tool).
-- Analytics service: PageRank/in-degree, hotspots, dead-code candidates and
-  symbol/file cycle detection via `analyze_graph`.
+- Analytics service: PageRank/in-degree/complexity, hotspots, dead-code
+  candidates and symbol/file cycle detection via `analyze_graph`.
+- Complexity metrics computed for TS/JS and tree-sitter languages and stored on
+  symbols.
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
 - Graph queries: search, symbol details, references, outline, neighborhood, repo map, file graph.
 - HTTP API with indexing actions:
@@ -114,8 +116,8 @@ Make the MCP server useful for real repository investigations.
 - [ ] Community detection over call/import edges to surface de facto modules.
 - [x] Cycle detection for files and call graphs; package cycles remain.
 - [x] Dead-code candidates: no indexed callers, excluding entry points and exports.
-- [x] Hotspot ranking from fan-in and fan-out (complexity signals remain).
-- [ ] Complexity fields: cyclomatic, cognitive, loop depth, allocation/scan-in-loop signals.
+- [x] Hotspot ranking from fan-in, fan-out and complexity signals.
+- [x] Complexity fields: cyclomatic, cognitive, loop depth, allocation/scan-in-loop signals.
 - [x] Git-aware change impact: changed files → symbols → reverse dependencies.
 - [ ] Snapshot comparison between two index runs.
 - [ ] UI views for architecture, hotspots, dead code and change impact.
