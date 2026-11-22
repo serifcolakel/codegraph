@@ -19,8 +19,16 @@ Implemented and verified:
 - SQLite storage with schema migrations, FTS5 symbol search, batched transactions.
 - TypeScript/JavaScript parsing via `ts-morph`, including JSDoc descriptions and tags
   (`@param`, `@returns`, `@throws`).
-- Heuristic parsing for C#, Go, Rust, Python, Java, Kotlin, Swift, C/C++, Ruby, PHP, Scala.
-- Documentation indexing for JSDoc, `///` / `/** */` comments and Python docstrings.
+- Tree-sitter AST parsing for Python, Go, Rust, Java, Kotlin and C#.
+- Heuristic parsing for Swift, C/C++, Ruby, PHP and Scala.
+- Documentation indexing for JSDoc, `///` / `/** */` comments, Python docstrings
+  and throws/raises tags.
+- Symbol v2 fields (`language`, `qualifiedName`, `visibility`, `containerName`)
+  and FTS camelCase/snake_case tokenization.
+- Manifest-based package resolution for `package.json`, `go.mod`, `Cargo.toml`
+  and `pyproject.toml`.
+- Parse coverage and unresolved-edge diagnostics (`coverage` CLI command,
+  `index_status` MCP tool).
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
 - Graph queries: search, symbol details, references, outline, neighborhood, repo map, file graph.
 - HTTP API with indexing actions:
@@ -31,8 +39,8 @@ Implemented and verified:
   - Search with keyboard navigation, symbol panel with docs, callers and callees.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 6 tools: `repo_map`, `outline_file`, `search_symbol`, `find_references`,
-  `neighborhood`, `read_file_range`.
+- MCP server with 7 tools: `repo_map`, `outline_file`, `search_symbol`, `find_references`,
+  `neighborhood`, `index_status`, `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -56,17 +64,18 @@ Implemented and verified:
 
 Replace heuristic-only parsing with real syntax trees for the primary languages.
 
-- [ ] Add a parser abstraction with per-language modules and shared output types.
-- [ ] Add tree-sitter-based parsing for Python, Go, Rust, C#, Java and Kotlin.
-- [ ] Keep `ts-morph` for TypeScript/JS type-aware details.
-- [ ] Keep a regex fallback for languages without an AST parser.
-- [ ] Extract `throws` / `raises` from JSDoc tags, C# `<exception>` and language syntax.
-- [ ] Add `language`, `qualifiedName`, `visibility` and `containerName` to symbol records.
-- [ ] Add `THROWS`, `RAISES`, `CALL_REFERENCE`, `USAGE`, file-level `IMPORTS` and `DEFINES` edges.
-- [ ] Resolve package/module specifiers from manifests (`package.json`, `go.mod`,
-      `Cargo.toml`, `pyproject.toml`, `pom.xml`, `build.gradle`).
-- [ ] Add camelCase / snake_case tokenization to FTS so `useFundSizes` matches `fund` and `sizes`.
-- [ ] Add parse coverage reporting: parsed, partial, skipped and unsupported files.
+- [x] Add a parser abstraction with per-language modules and shared output types.
+- [x] Add tree-sitter-based parsing for Python, Go, Rust, C#, Java and Kotlin.
+- [x] Keep `ts-morph` for TypeScript/JS type-aware details.
+- [x] Keep a regex fallback for languages without an AST parser.
+- [x] Extract `throws` / `raises` from JSDoc tags, C# `<exception>` and language syntax.
+- [x] Add `language`, `qualifiedName`, `visibility` and `containerName` to symbol records.
+- [x] Emit `THROWS` and `RAISES` edges; `CALL_REFERENCE`, `USAGE`, file-level
+      `IMPORTS` and `DEFINES` edges remain.
+- [x] Resolve package/module specifiers from `package.json`, `go.mod`,
+      `Cargo.toml` and `pyproject.toml`; `pom.xml` and `build.gradle` remain.
+- [x] Add camelCase / snake_case tokenization to FTS so `useFundSizes` matches `fund` and `sizes`.
+- [x] Add parse coverage reporting: parsed, partial, skipped and unsupported files.
 
 Definition of done: primary languages produce AST-backed symbols; unresolved edges are explicit;
 tests cover one representative construct per language.

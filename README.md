@@ -8,14 +8,20 @@ MCP server.
 ## Features
 
 - Incremental indexing: files are hashed and only changed files are re-parsed.
-- Multi-language parsing: TypeScript/JavaScript, C#, Go, Rust, Python, Java,
-  Kotlin, Swift, C/C++, Ruby, PHP and Scala.
+- Multi-language parsing: tree-sitter ASTs for Python, Go, Rust, Java, Kotlin
+  and C#, `ts-morph` for TypeScript/JavaScript, and a regex fallback for Swift,
+  C/C++, Ruby, PHP and Scala.
 - Symbol graph: files, symbols (functions, classes, interfaces, types, enums,
-  methods, properties, consts) and edges (import, call, reference, extends,
-  implements, contains).
+  methods, properties, consts) with language, qualified name and visibility,
+  plus import, call, reference, extends, implements, contains, throws and raises
+  edges.
+- Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
+  the `index_status` MCP tool).
 - Documentation indexing: JSDoc, `///` / `/** */` block docs and Python
   docstrings are stored with symbols and included in full-text search.
-- Module-aware cross-file edge resolution with ambiguity protection.
+- Module-aware cross-file edge resolution using relative paths and workspace
+  manifests (`package.json`, `go.mod`, `Cargo.toml`, `pyproject.toml`) with
+  ambiguity protection and explicit unresolved edges.
 - FTS5 symbol search plus a ranked repository map.
 - Static HTML/Cytoscape.js visualization (no frontend build step) with dark and
   light themes, deep links, callers/callees, type filters and view history.
@@ -48,6 +54,10 @@ npm run codegraph -- index /path/to/repo --watch
 
 # Show global or per-repo statistics
 npm run codegraph -- stats
+
+# Show parse coverage and unresolved edges (all repos or one)
+npm run codegraph -- coverage
+npm run codegraph -- coverage <repoId>
 
 # Serve the HTTP API and graph UI (default port 4310)
 npm run codegraph -- serve --port 4310
@@ -97,8 +107,9 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 ## MCP server
 
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
-`find_references`, `neighborhood`, and `read_file_range`. Inputs are validated
-with Effect `Schema`, and results are compact text with `file:line` references.
+`find_references`, `neighborhood`, `index_status`, and `read_file_range`. Inputs
+are validated with Effect `Schema`, and results are compact text with `file:line`
+references.
 
 ### 1. Index the repository
 
@@ -194,7 +205,8 @@ src/
   domain/     Schema models, typed errors, configuration
   http/       HTTP API and static UI serving
   mcp/        MCP tool definitions and handlers
-  services/   FileWalker, Parser, IndexStore, Indexer, GraphQuery
+  parsers/    tree-sitter and ts-morph language parsers
+  services/   FileWalker, Parser, IndexStore, Indexer, GraphQuery, Diagnostics
 web/          Single-page Cytoscape.js visualization
 tests/        @effect/vitest service and integration tests
 ```
