@@ -40,10 +40,10 @@ Implemented and verified:
   - Metadata bar with last index time, duration, source size and repo counts.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 16 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
-  `get_architecture`, `trace_path`, `detect_changes`, `index_repository`, `list_projects`,
-  `find_references`, `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`,
-  `search_code`, `read_file_range`.
+- MCP server with 17 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
+  `get_architecture`, `trace_path`, `detect_changes`, `index_repository`, `delete_project`,
+  `list_projects`, `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
+  `get_code_snippet`, `search_code`, `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -88,7 +88,7 @@ tests cover one representative construct per language.
 Make the MCP server useful for real repository investigations.
 
 - [x] `index_repository` (index a path into the current database).
-- [x] `list_projects`; `delete_project` remains.
+- [x] `list_projects` and `delete_project`.
 - [x] `index_status` and coverage diagnostics.
 - [x] `search_graph` with name regex, kind filters, file scope, degree filters and paging.
 - [x] `get_graph_schema` describing node labels, edge kinds and properties.

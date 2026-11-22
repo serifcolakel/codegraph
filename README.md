@@ -99,6 +99,8 @@ configured ignore globs.
 | Endpoint                                        | Description                                |
 | ----------------------------------------------- | ------------------------------------------ |
 | `GET /api/repos`                                | Repos with index time, size and counts     |
+| `GET /api/coverage?repo=`                       | Parse coverage and import diagnostics      |
+| `GET /api/architecture?repo=`                   | Languages, packages, entry points, hotspots|
 | `GET /api/graph?repo=&level=file`               | File-level import/call graph               |
 | `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)            |
 | `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                        |
@@ -116,8 +118,8 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
-`list_projects`, `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
-`get_code_snippet`, `search_code`, and `read_file_range`. Inputs are validated
+`delete_project`, `list_projects`, `find_references`, `neighborhood`, `index_status`,
+`get_graph_schema`, `get_code_snippet`, `search_code`, and `read_file_range`. Inputs are validated
 with Effect `Schema`, and results are compact text with `file:line` references.
 
 ### 1. Index the repository
