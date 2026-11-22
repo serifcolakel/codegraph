@@ -31,7 +31,8 @@ MCP server.
 
 ## Requirements
 
-- Node.js 20+ (or Bun) and npm.
+- Node.js 20+ and npm. Run the CLI with Node; Bun is not supported because the
+  SQLite driver (`better-sqlite3`) is a native Node module.
 - No external services; everything runs locally.
 
 ## Install and build
@@ -108,8 +109,9 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 ## MCP server
 
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
-`search_graph`, `list_projects`, `find_references`, `neighborhood`, `index_status`,
-`get_graph_schema`, `get_code_snippet`, `search_code`, and `read_file_range`. Inputs are validated
+`search_graph`, `get_architecture`, `list_projects`, `find_references`, `neighborhood`,
+`index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, and
+`read_file_range`. Inputs are validated
 with Effect `Schema`, and results are compact text with `file:line` references.
 
 ### 1. Index the repository
