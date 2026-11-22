@@ -8,6 +8,7 @@ import {
   McpError
 } from "@modelcontextprotocol/sdk/types.js"
 import { Effect, type ManagedRuntime, Schema } from "effect"
+import { ChangeImpact } from "../services/ChangeImpact.js"
 import { Diagnostics, formatStatus } from "../services/Diagnostics.js"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { IndexStore } from "../services/IndexStore.js"
@@ -73,6 +74,12 @@ export type CodeSnippetInput = typeof CodeSnippetInput.Type
 export const ListProjectsInput = Schema.Struct({})
 export type ListProjectsInput = typeof ListProjectsInput.Type
 
+export const DetectChangesInput = Schema.Struct({
+  repoId: Schema.optional(Schema.String),
+  base: Schema.optional(Schema.String)
+})
+export type DetectChangesInput = typeof DetectChangesInput.Type
+
 export const TracePathInput = Schema.Struct({
   selector: Schema.String,
   direction: Schema.optional(Schema.Literal("inbound", "outbound", "both")),
@@ -112,7 +119,7 @@ export type SearchCodeInput = typeof SearchCodeInput.Type
 
 export const createMcpServer = <R>(
   runtime: ManagedRuntime.ManagedRuntime<
-    IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path | R,
+    IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path | R,
     unknown
   >
 ) => {
@@ -161,6 +168,21 @@ export const createMcpServer = <R>(
               repoId: { type: "string", description: "Optional repo ID" }
             },
             required: ["path"]
+          }
+        },
+        {
+          name: "detect_changes",
+          description:
+            "Maps git changes to affected symbols and their blast radius (reverse references).",
+          inputSchema: {
+            type: "object",
+            properties: {
+              repoId: { type: "string", description: "Optional repo ID" },
+              base: {
+                type: "string",
+                description: "Git base ref; omit to diff the working tree against HEAD"
+              }
+            }
           }
         },
         {
@@ -396,6 +418,38 @@ export const createMcpServer = <R>(
               }
             ]
           }
+        }
+
+        case "detect_changes": {
+          const args = Schema.decodeUnknownSync(DetectChangesInput)(rawArgs ?? {})
+          const report = await runtime.runPromise(
+            Effect.gen(function* () {
+              const impact = yield* ChangeImpact
+              const repoId = yield* getTargetRepoId(args.repoId)
+              return yield* impact.detect(repoId, args.base)
+            })
+          )
+
+          const changed = report.changedFiles.map(
+            (filePath) =>
+              `  ${filePath}${report.indexedFiles.includes(filePath) ? "" : " (not indexed)"}`
+          )
+          const affected = report.affectedSymbols.map(
+            (symbol) => `  ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine}`
+          )
+          const impacted = report.impactedSymbols.map(
+            (symbol) =>
+              `  ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} <- ${symbol.referencedBy.join(", ")}`
+          )
+          const text = [
+            `changed files (${report.changedFiles.length}):`,
+            ...(changed.length > 0 ? changed : ["  none"]),
+            `affected symbols (${report.affectedSymbols.length}):`,
+            ...(affected.length > 0 ? affected : ["  none"]),
+            `blast radius (${report.impactedSymbols.length})${report.truncated ? " · truncated=true" : ""}:`,
+            ...(impacted.length > 0 ? impacted : ["  none"])
+          ].join("\n")
+          return { content: [{ type: "text", text }] }
         }
 
         case "trace_path": {
@@ -786,7 +840,7 @@ export const createMcpServer = <R>(
 
 export const startMcpServer = <R>(
   runtime: ManagedRuntime.ManagedRuntime<
-    IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path | R,
+    IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path | R,
     unknown
   >
 ) => {

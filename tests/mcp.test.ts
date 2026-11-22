@@ -6,8 +6,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { Effect, Layer, ManagedRuntime } from "effect"
 import { describe, expect } from "vitest"
 import { createMcpServer } from "../src/mcp/index.js"
+import { type ChangeImpact, ChangeImpactLive } from "../src/services/ChangeImpact.js"
 import { type Diagnostics, DiagnosticsLive } from "../src/services/Diagnostics.js"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
+import { GitChangesLive } from "../src/services/GitChanges.js"
 import { type GraphQuery, GraphQueryLive } from "../src/services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
 import { type IndexStore, IndexStoreLive } from "../src/services/IndexStore.js"
@@ -57,7 +59,7 @@ export function top(): string {
 
         // Create runtime and MCP server
         const runtime = yield* Effect.runtime<
-          IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path
+          IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path
         >()
         const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
         const mcpServer = createMcpServer(managedRuntime)
@@ -95,6 +97,7 @@ export function top(): string {
         expect(toolNames).toContain("search_graph")
         expect(toolNames).toContain("get_architecture")
         expect(toolNames).toContain("trace_path")
+        expect(toolNames).toContain("detect_changes")
 
         const callToolHandler = handlers.get(CallToolRequestSchema.shape.method.value)
         if (!callToolHandler) throw new Error("call tool handler not registered")
@@ -127,7 +130,13 @@ export function top(): string {
         expect(statusResult.content[0]?.text).toContain("coverage:")
         expect(statusResult.content[0]?.text).toContain("unresolved edges:")
 
-        // 6. Test trace_path
+        // 6. Test detect_changes error path on a non-git directory
+        const detectResult = (yield* callTool("detect_changes", {
+          repoId: report.repoId
+        })) as ToolCallResult & { readonly isError?: boolean }
+        expect(detectResult.content[0]?.text).toContain("Failed to read git changes")
+
+        // 7. Test trace_path
         const traceResult = yield* callTool("trace_path", {
           selector: "service.top",
           direction: "outbound",
@@ -142,19 +151,19 @@ export function top(): string {
         const missingTrace = yield* callTool("trace_path", { selector: "service.Missing" })
         expect(missingTrace.content[0]?.text).toContain("No symbol matched")
 
-        // 7. Test get_architecture
+        // 8. Test get_architecture
         const architectureResult = yield* callTool("get_architecture", { repoId: report.repoId })
         expect(architectureResult.content[0]?.text).toContain("languages: typescript=1")
         expect(architectureResult.content[0]?.text).toContain("packages:")
         expect(architectureResult.content[0]?.text).toContain("hotspots:")
         expect(architectureResult.content[0]?.text).toContain("service.ts")
 
-        // 8. Test list_projects
+        // 9. Test list_projects
         const projectsResult = yield* callTool("list_projects", {})
         expect(projectsResult.content[0]?.text).toContain("mcp-test-repo")
         expect(projectsResult.content[0]?.text).toContain(report.repoId)
 
-        // 9. Test search_graph with regex, kind filter and paging
+        // 10. Test search_graph with regex, kind filter and paging
         const graphSearch = yield* callTool("search_graph", {
           namePattern: "Memory.*",
           regex: true,
@@ -173,12 +182,12 @@ export function top(): string {
         })
         expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
 
-        // 10. Test get_graph_schema
+        // 11. Test get_graph_schema
         const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
-        // 11. Test get_code_snippet by qualified name
+        // 12. Test get_code_snippet by qualified name
         const snippetResult = yield* callTool("get_code_snippet", {
           qualifiedName: "service.MemoryDataService",
           repoId: report.repoId
@@ -193,14 +202,14 @@ export function top(): string {
         })
         expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
 
-        // 12. Test search_code
+        // 13. Test search_code
         const searchCodeResult = yield* callTool("search_code", {
           query: "MemoryDataService",
           repoId: report.repoId
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 13. Test read_file_range
+        // 14. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
@@ -221,6 +230,9 @@ export function top(): string {
           const DiagnosticsServiceLive = DiagnosticsLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
           )
+          const ChangeImpactServiceLive = ChangeImpactLive.pipe(
+            Layer.provide(Layer.mergeAll(StoreLive, QueryLive, GitChangesLive))
+          )
           const PlatformLive = Layer.merge(NodeFileSystem.layer, NodePath.layer)
           const WalkerLive = FileWalkerLive.pipe(Layer.provide(PlatformLive))
           const IndexerTestLive = IndexerLive.pipe(
@@ -231,6 +243,7 @@ export function top(): string {
             StoreLive,
             QueryLive,
             DiagnosticsServiceLive,
+            ChangeImpactServiceLive,
             PlatformLive
           )
         })()

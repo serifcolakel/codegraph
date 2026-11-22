@@ -7,8 +7,10 @@ import { Console, Effect, Layer, ManagedRuntime, Stream } from "effect"
 import { appConfig } from "../domain/config.js"
 import { serveHttp } from "../http/index.js"
 import { startMcpServer } from "../mcp/index.js"
+import { ChangeImpact, ChangeImpactLive } from "../services/ChangeImpact.js"
 import { Diagnostics, DiagnosticsLive, formatStatus } from "../services/Diagnostics.js"
 import { FileWalkerLive } from "../services/FileWalker.js"
+import { GitChangesLive } from "../services/GitChanges.js"
 import { type GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../services/Indexer.js"
 import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
@@ -132,13 +134,54 @@ const coverageCommand = Command.make(
     })
 )
 
-// 5. MCP command (Model Context Protocol stdio server)
+// 5. Change impact command (git diff -> affected symbols and blast radius)
+const changesCommand = Command.make(
+  "changes",
+  {
+    repo: Args.text({ name: "repo" }),
+    base: Options.text("base").pipe(Options.optional)
+  },
+  ({ repo, base }) =>
+    Effect.gen(function* () {
+      const store = yield* IndexStore
+      yield* store.initSchema()
+      const impact = yield* ChangeImpact
+      const report = yield* impact
+        .detect(repo, base._tag === "Some" ? base.value : undefined)
+        .pipe(Effect.catchAll((error) => Console.error(`${error._tag}: ${error.message}`)))
+      if (!report) return
+
+      yield* Console.log(`\n=== Change impact for ${report.repoId} ===`)
+      yield* Console.log(`Changed files (${report.changedFiles.length}):`)
+      for (const filePath of report.changedFiles) {
+        yield* Console.log(
+          `  ${filePath}${report.indexedFiles.includes(filePath) ? "" : " (not indexed)"}`
+        )
+      }
+      yield* Console.log(`Affected symbols (${report.affectedSymbols.length}):`)
+      for (const symbol of report.affectedSymbols) {
+        yield* Console.log(
+          `  ${symbol.name} (${symbol.kind}) at ${symbol.filePath}:${symbol.startLine}`
+        )
+      }
+      yield* Console.log(`Blast radius (${report.impactedSymbols.length}):`)
+      for (const symbol of report.impactedSymbols) {
+        yield* Console.log(
+          `  ${symbol.name} (${symbol.kind}) at ${symbol.filePath}:${symbol.startLine} <- ${symbol.referencedBy.join(", ")}`
+        )
+      }
+      if (report.truncated) yield* Console.log("  (truncated)")
+      yield* Console.log("")
+    })
+)
+
+// 6. MCP command (Model Context Protocol stdio server)
 const mcpCommand = Command.make("mcp", {}, () =>
   Effect.gen(function* () {
     const store = yield* IndexStore
     yield* store.initSchema()
     const runtime = yield* Effect.runtime<
-      IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path
+      IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path
     >()
     const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
     yield* Effect.promise(() => startMcpServer(managedRuntime))
@@ -147,7 +190,14 @@ const mcpCommand = Command.make("mcp", {}, () =>
 
 // Root command
 const rootCommand = Command.make("codegraph").pipe(
-  Command.withSubcommands([indexCommand, statsCommand, coverageCommand, serveCommand, mcpCommand])
+  Command.withSubcommands([
+    indexCommand,
+    statsCommand,
+    coverageCommand,
+    changesCommand,
+    serveCommand,
+    mcpCommand
+  ])
 )
 
 export const cli = Command.run(rootCommand, {
@@ -165,6 +215,9 @@ export const MainLive = Layer.unwrapEffect(
     const DiagnosticsServiceLive = DiagnosticsLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
     )
+    const ChangeImpactServiceLive = ChangeImpactLive.pipe(
+      Layer.provide(Layer.mergeAll(StoreLive, QueryLive, GitChangesLive))
+    )
     const WalkerLive = FileWalkerLive.pipe(Layer.provide(NodeContext.layer))
     const IndexerServiceLive = IndexerLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, NodeContext.layer))
@@ -178,6 +231,8 @@ export const MainLive = Layer.unwrapEffect(
       ParserLive,
       IndexerServiceLive,
       DiagnosticsServiceLive,
+      ChangeImpactServiceLive,
+      GitChangesLive,
       NodeContext.layer
     )
   })

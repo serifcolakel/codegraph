@@ -25,3 +25,8 @@ export class GraphError extends Data.TaggedError("GraphError")<{
   readonly message: string
   readonly cause?: unknown
 }> {}
+
+export class GitError extends Data.TaggedError("GitError")<{
+  readonly message: string
+  readonly cause?: unknown
+}> {}
