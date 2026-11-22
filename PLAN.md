@@ -37,6 +37,7 @@ Implemented and verified:
 - Static HTML UI:
   - Dark/light themes, folder-grouped file graph, type filters, back/forward view history.
   - Search with keyboard navigation, symbol panel with docs, callers and callees.
+  - Metadata bar with last index time, duration, source size and repo counts.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
 - MCP server with 16 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,

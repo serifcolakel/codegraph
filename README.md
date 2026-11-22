@@ -26,6 +26,8 @@ MCP server.
 - FTS5 symbol search plus a ranked repository map.
 - Static HTML/Cytoscape.js visualization (no frontend build step) with dark and
   light themes, deep links, callers/callees, type filters and view history.
+- Repository metadata bar in the UI: last index time, index duration, source
+  size, file/symbol/edge counts.
 - HTTP JSON API and an MCP stdio server.
 - Optional watch mode that re-indexes on change (debounced).
 
@@ -96,7 +98,7 @@ configured ignore globs.
 
 | Endpoint                                        | Description                                |
 | ----------------------------------------------- | ------------------------------------------ |
-| `GET /api/repos`                                | Indexed repositories                       |
+| `GET /api/repos`                                | Repos with index time, size and counts     |
 | `GET /api/graph?repo=&level=file`               | File-level import/call graph               |
 | `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)            |
 | `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                        |
