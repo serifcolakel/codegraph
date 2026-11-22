@@ -46,6 +46,7 @@ Implemented and verified:
   `analyze_graph(duplicates)` and persisted `similar_to` edges.
 - Repo-scoped gzip graph artifacts for team baselines with force-safe import and
   incremental updates.
+- Optional daemon with HTTP server and debounced repository watches.
 - File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
@@ -73,7 +74,7 @@ Implemented and verified:
   `index_job_status`, `delete_project`, `list_projects`, `find_references`,
   `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
   `read_file_range`.
-- CLI: `index [--watch] [--force]`, `serve`, `stats`, `coverage`, `freshness`, `changes`, `link`, `mcp`.
+- CLI: `index [--watch] [--force]`, `serve`, `daemon`, `stats`, `coverage`, `freshness`, `changes`, `link`, `artifact`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
 ## Architecture Rules
@@ -169,7 +170,7 @@ Make the MCP server useful for real repository investigations.
 - [x] Shared compressed graph artifact for team baselines (gzip via Node stdlib; zstd remains optional).
 - [x] Artifact import on first index, then incremental local updates.
 - [x] Index freshness metadata and explicit stale/partial reporting.
-- [ ] Optional daemon to own long-running watches and async jobs.
+- [x] Optional daemon owning the HTTP server and debounced watches.
 - [x] Configurable neighborhood, search and depth limits.
 - [x] Agent integration skill and automatic index hooks (Claude Code, Codex, Copilot, opencode, git).
 

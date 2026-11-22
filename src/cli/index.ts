@@ -155,6 +155,60 @@ const serveCommand = Command.make(
     })
 )
 
+// 3.5 Daemon command (HTTP server + long-running repository watches)
+const daemonCommand = Command.make(
+  "daemon",
+  {
+    port: Options.integer("port").pipe(Options.withDefault(4310))
+  },
+  ({ port }) =>
+    Effect.gen(function* () {
+      const store = yield* IndexStore
+      const indexer = yield* Indexer
+      const fs = yield* FileSystem.FileSystem
+      const config = yield* appConfig
+      yield* store.initSchema()
+
+      const repos = yield* store.listRepos()
+      yield* Console.log(
+        `[daemon] HTTP on :${port}; watching ${repos.length} repositor${repos.length === 1 ? "y" : "ies"}`
+      )
+      if (repos.length > 0) {
+        yield* Console.log("[daemon] New repositories require a daemon restart to be watched.")
+      }
+
+      const watchOne = (repoId: string, name: string, rootPath: string) =>
+        fs.watch(rootPath, { recursive: true }).pipe(
+          Stream.debounce(config.watchDebounceMs),
+          Stream.runForEach(() =>
+            indexer.indexRepo(rootPath).pipe(
+              Effect.tap((report) =>
+                Console.log(
+                  `[daemon] ${name}: ${report.filesIndexed} indexed, ${report.filesSkipped} skipped, ${report.filesDeleted} deleted`
+                )
+              ),
+              Effect.catchAll((error) =>
+                Console.error(`[daemon] ${name} re-index failed: ${error.message}`)
+              )
+            )
+          ),
+          Effect.catchAllCause((cause) =>
+            Console.error(`[daemon] watch failed for ${repoId}: ${cause}`)
+          )
+        )
+
+      const watchAll =
+        repos.length === 0
+          ? Effect.void
+          : Effect.all(
+              repos.map((repo) => watchOne(repo.id, repo.name, repo.rootPath)),
+              { concurrency: "unbounded" }
+            )
+
+      yield* Effect.all([serveHttp(port), watchAll], { concurrency: "unbounded" })
+    })
+)
+
 // 4. Coverage command (parse coverage and unresolved edge diagnostics)
 const coverageCommand = Command.make(
   "coverage",
@@ -303,6 +357,7 @@ const rootCommand = Command.make("codegraph").pipe(
     indexCommand,
     artifactCommand,
     statsCommand,
+    daemonCommand,
     coverageCommand,
     freshnessCommand,
     changesCommand,
