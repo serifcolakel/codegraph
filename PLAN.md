@@ -40,10 +40,10 @@ Implemented and verified:
   - Metadata bar with last index time, duration, source size and repo counts.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 17 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
-  `get_architecture`, `trace_path`, `detect_changes`, `index_repository`, `delete_project`,
-  `list_projects`, `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
-  `get_code_snippet`, `search_code`, `read_file_range`.
+- MCP server with 18 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
+  `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
+  `index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
+  `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -100,7 +100,7 @@ Make the MCP server useful for real repository investigations.
 - [ ] `query_graph` exposing a safe read-only Cypher-like subset.
 - [x] `search_code` restricted to indexed files.
 - [ ] Keep outputs compact, paged and token-efficient; always include `file:line`.
-- [ ] Add async indexing with a job status endpoint for long repositories.
+- [x] Add async indexing with a job status endpoint for long repositories.
 
 ### Phase 3 — Analytics and impact (P1)
 

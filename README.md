@@ -118,8 +118,9 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
-`delete_project`, `list_projects`, `find_references`, `neighborhood`, `index_status`,
-`get_graph_schema`, `get_code_snippet`, `search_code`, and `read_file_range`. Inputs are validated
+`index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
+`index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, and
+`read_file_range`. Inputs are validated
 with Effect `Schema`, and results are compact text with `file:line` references.
 
 ### 1. Index the repository
