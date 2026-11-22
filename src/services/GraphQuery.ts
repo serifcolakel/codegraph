@@ -58,6 +58,26 @@ export interface ArchitectureSummary {
   readonly hotspots: readonly ArchitectureSymbol[]
 }
 
+export type TraceDirection = "inbound" | "outbound" | "both"
+export type TraceMode = "calls" | "references" | "data_flow" | "cross_file"
+
+export interface TracePathOptions {
+  readonly direction?: TraceDirection
+  readonly depth?: number
+  readonly mode?: TraceMode
+}
+
+export interface TraceNode extends ArchitectureSymbol {
+  readonly hop: number
+}
+
+export interface TracePathResult {
+  readonly start: ArchitectureSymbol
+  readonly nodes: readonly TraceNode[]
+  readonly edges: readonly EdgeRecord[]
+  readonly truncated: boolean
+}
+
 export interface GraphQuery {
   readonly searchSymbols: (
     query: string,
@@ -77,6 +97,11 @@ export interface GraphQuery {
   ) => Effect.Effect<SearchGraphResult, StoreError>
 
   readonly architecture: (repoId: string) => Effect.Effect<ArchitectureSummary, StoreError>
+
+  readonly tracePath: (
+    selector: string,
+    options?: TracePathOptions
+  ) => Effect.Effect<TracePathResult | null, StoreError>
 
   readonly findReferences: (
     symbolId: string
@@ -495,6 +520,136 @@ export const GraphQueryLive = Layer.effect(
           packages: packageRows,
           entryPoints: entryRows,
           hotspots: symbolRows
+        }
+      })
+
+    const EDGE_KINDS_BY_MODE: Readonly<Record<TraceMode, readonly EdgeKind[] | undefined>> = {
+      calls: ["call", "call_reference"],
+      references: undefined,
+      data_flow: ["call", "call_reference", "usage", "reference"],
+      cross_file: undefined
+    }
+
+    const tracePath = (
+      selector: string,
+      options: TracePathOptions = {}
+    ): Effect.Effect<TracePathResult | null, StoreError> =>
+      Effect.gen(function* () {
+        const startRows = yield* (
+          selector.includes("#")
+            ? sql<{
+                id: string
+                name: string
+                kind: SymbolKind
+                filePath: string
+                startLine: number
+                inDegree: number
+              }>`
+              SELECT s.id, s.name, s.kind, f.path as filePath, s.start_line as startLine,
+                     (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+              FROM symbols s JOIN files f ON s.file_id = f.id
+              WHERE s.id = ${selector} LIMIT 1;
+            `
+            : sql<{
+                id: string
+                name: string
+                kind: SymbolKind
+                filePath: string
+                startLine: number
+                inDegree: number
+              }>`
+              SELECT s.id, s.name, s.kind, f.path as filePath, s.start_line as startLine,
+                     (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+              FROM symbols s JOIN files f ON s.file_id = f.id
+              WHERE s.qualified_name = ${selector} OR s.name = ${selector}
+              ORDER BY CASE WHEN s.qualified_name = ${selector} THEN 0 ELSE 1 END
+              LIMIT 1;
+            `
+        ).pipe(
+          Effect.mapError((e) => new StoreError({ message: "Trace path lookup failed", cause: e }))
+        )
+
+        const start = startRows[0]
+        if (!start) return null
+
+        const direction = options.direction ?? "both"
+        const depth = Math.max(1, Math.min(6, Math.floor(options.depth ?? 2)))
+        const mode = options.mode ?? "calls"
+        const kinds = EDGE_KINDS_BY_MODE[mode]
+        const kindClause = kinds ? sql`AND e.kind IN ${sql.in(kinds)}` : sql``
+        const isSentinel = (id: string) => id.startsWith("symbol:") || id.startsWith("module:")
+
+        const MAX_NODES = 300
+        const visited = new Map<string, number>([[start.id, 0]])
+        const collectedEdges = new Map<string, EdgeRecord>()
+        let frontier = new Set<string>([start.id])
+        let truncated = false
+
+        for (let hop = 1; hop <= depth; hop++) {
+          if (frontier.size === 0) break
+          const ids = Array.from(frontier)
+          const rows = yield* sql<EdgeRecord>`
+            SELECT e.id, e.src_symbol_id as srcSymbolId, e.dst_symbol_id as dstSymbolId, e.kind
+            FROM edges e
+            WHERE (e.src_symbol_id IN ${sql.in(ids)} OR e.dst_symbol_id IN ${sql.in(ids)})
+              ${kindClause};
+          `.pipe(
+            Effect.mapError((e) => new StoreError({ message: "Trace path edges failed", cause: e }))
+          )
+
+          const next = new Set<string>()
+          const consider = (id: string) => {
+            if (isSentinel(id) || visited.has(id)) return
+            if (visited.size >= MAX_NODES) {
+              truncated = true
+              return
+            }
+            visited.set(id, hop)
+            next.add(id)
+          }
+
+          for (const edge of rows) {
+            const outMatches =
+              (direction === "outbound" || direction === "both") && frontier.has(edge.srcSymbolId)
+            const inMatches =
+              (direction === "inbound" || direction === "both") && frontier.has(edge.dstSymbolId)
+            if (!outMatches && !inMatches) continue
+            collectedEdges.set(edge.id, edge)
+            if (outMatches) consider(edge.dstSymbolId)
+            if (inMatches) consider(edge.srcSymbolId)
+          }
+
+          frontier = next
+        }
+
+        const nodeIds = Array.from(visited.keys())
+        const nodeRows = yield* sql<{
+          id: string
+          name: string
+          kind: SymbolKind
+          filePath: string
+          startLine: number
+          inDegree: number
+        }>`
+          SELECT s.id, s.name, s.kind, f.path as filePath, s.start_line as startLine,
+                 (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+          FROM symbols s JOIN files f ON s.file_id = f.id
+          WHERE s.id IN ${sql.in(nodeIds)};
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Trace path nodes failed", cause: e }))
+        )
+
+        const nodes = nodeRows
+          .map((row) => ({ ...row, hop: visited.get(row.id) ?? 0 }))
+          .sort((a, b) => a.hop - b.hop || a.name.localeCompare(b.name))
+
+        return {
+          start,
+          nodes,
+          edges: Array.from(collectedEdges.values()).filter(
+            (edge) => visited.has(edge.srcSymbolId) && visited.has(edge.dstSymbolId)
+          ),
+          truncated
         }
       })
 
@@ -1134,6 +1289,7 @@ export const GraphQueryLive = Layer.effect(
       getSymbolByQualifiedName,
       searchGraph,
       architecture,
+      tracePath,
       findReferences,
       outlineFile,
       neighborhood,

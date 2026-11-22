@@ -73,6 +73,14 @@ export type CodeSnippetInput = typeof CodeSnippetInput.Type
 export const ListProjectsInput = Schema.Struct({})
 export type ListProjectsInput = typeof ListProjectsInput.Type
 
+export const TracePathInput = Schema.Struct({
+  selector: Schema.String,
+  direction: Schema.optional(Schema.Literal("inbound", "outbound", "both")),
+  depth: Schema.optional(Schema.Number),
+  mode: Schema.optional(Schema.Literal("calls", "references", "data_flow", "cross_file"))
+})
+export type TracePathInput = typeof TracePathInput.Type
+
 export const ArchitectureInput = Schema.Struct({
   repoId: Schema.optional(Schema.String)
 })
@@ -153,6 +161,21 @@ export const createMcpServer = <R>(
               repoId: { type: "string", description: "Optional repo ID" }
             },
             required: ["path"]
+          }
+        },
+        {
+          name: "trace_path",
+          description:
+            "Traces callers and callees of a symbol by qualified name or ID, with depth and mode.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              selector: { type: "string", description: "Symbol ID or qualified name" },
+              direction: { type: "string", enum: ["inbound", "outbound", "both"] },
+              depth: { type: "number", description: "Hops (default 2, max 6)" },
+              mode: { type: "string", enum: ["calls", "references", "data_flow", "cross_file"] }
+            },
+            required: ["selector"]
           }
         },
         {
@@ -373,6 +396,45 @@ export const createMcpServer = <R>(
               }
             ]
           }
+        }
+
+        case "trace_path": {
+          const args = Schema.decodeUnknownSync(TracePathInput)(rawArgs ?? {})
+          const result = await runtime.runPromise(
+            Effect.gen(function* () {
+              const query = yield* GraphQuery
+              return yield* query.tracePath(args.selector, {
+                ...(args.direction !== undefined ? { direction: args.direction } : {}),
+                ...(args.depth !== undefined ? { depth: args.depth } : {}),
+                ...(args.mode !== undefined ? { mode: args.mode } : {})
+              })
+            })
+          )
+
+          if (!result) {
+            return {
+              content: [{ type: "text", text: `No symbol matched selector "${args.selector}".` }]
+            }
+          }
+
+          const names = new Map(result.nodes.map((node) => [node.id, node.name]))
+          const nodeLines = result.nodes.map(
+            (node) =>
+              `[hop ${node.hop}] ${node.name} (${node.kind}) ${node.filePath}:${node.startLine}`
+          )
+          const edgeLines = result.edges.map((edge) => {
+            const from = names.get(edge.srcSymbolId) ?? edge.srcSymbolId
+            const to = names.get(edge.dstSymbolId) ?? edge.dstSymbolId
+            return `  ${from} --[${edge.kind}]--> ${to}`
+          })
+          const text = [
+            `start: ${result.start.name} (${result.start.kind}) ${result.start.filePath}:${result.start.startLine}`,
+            `nodes (${result.nodes.length})${result.truncated ? " · truncated=true" : ""}:`,
+            ...nodeLines,
+            `edges (${result.edges.length}):`,
+            ...(edgeLines.length > 0 ? edgeLines : ["  none"])
+          ].join("\n")
+          return { content: [{ type: "text", text }] }
         }
 
         case "get_architecture": {
