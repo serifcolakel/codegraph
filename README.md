@@ -34,7 +34,9 @@ MCP server.
   dark and light themes, deep links, callers/callees, type filters and history.
 - Repository metadata stat cards in the UI: last index time, index duration,
   source size, file/symbol/edge counts. An **Index details** dialog shows
-  languages, parse coverage, import resolution and recent indexing jobs.
+  languages, parse coverage, import resolution and recent indexing jobs. An
+  **Insights** dialog surfaces architecture, hotspots, complexity, dead code,
+  cycles and change impact, with click-through to the graph.
 - HTTP JSON API and an MCP stdio server.
 - Optional watch mode that re-indexes on change (debounced).
 
@@ -108,6 +110,8 @@ configured ignore globs.
 | `GET /api/repos`                                | Repos with index time, size and counts      |
 | `GET /api/coverage?repo=`                       | Parse coverage and import diagnostics       |
 | `GET /api/architecture?repo=`                   | Languages, packages, entry points, hotspots |
+| `GET /api/analytics?repo=&analysis=`            | Ranking, hotspots, dead code, cycles        |
+| `GET /api/changes?repo=&base=`                  | Git change impact and blast radius          |
 | `GET /api/graph?repo=&level=file`               | File-level import/call graph                |
 | `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)             |
 | `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                         |
