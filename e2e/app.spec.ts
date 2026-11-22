@@ -108,6 +108,9 @@ test.describe("CodeGraph web UI", () => {
     await expect(page.getByTestId("dock")).toBeVisible()
     await expect(page.getByTestId("view-mode")).toHaveText("File graph")
     await expect(page.getByTestId("graph-canvas")).toBeVisible()
+    await expect(page.getByTestId("minimap")).toBeVisible()
+    const minimap = await page.getByTestId("minimap").boundingBox()
+    expect(minimap?.width ?? 0).toBeGreaterThan(100)
 
     const nodes = Number((await page.getByTestId("stat-nodes").textContent())?.replace(/,/g, ""))
     const edges = Number((await page.getByTestId("stat-edges").textContent())?.replace(/,/g, ""))

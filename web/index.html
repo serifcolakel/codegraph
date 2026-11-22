@@ -334,6 +334,23 @@
         font-size: 0.64rem;
       }
 
+      .minimap {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        z-index: 5;
+        width: 156px;
+        height: 104px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        box-shadow: 0 12px 30px -20px rgba(0, 0, 0, 0.8);
+        cursor: crosshair;
+        pointer-events: auto;
+      }
+
       .insight-toolbar {
         display: flex;
         align-items: flex-end;
@@ -2156,6 +2173,13 @@
             </div>
           </div>
 
+          <canvas
+            id="minimap"
+            data-testid="minimap"
+            class="minimap"
+            aria-label="Graph minimap"
+          ></canvas>
+
           <div
             id="loadingOverlay" data-testid="loading-overlay"
             class="loading-overlay"
@@ -2484,6 +2508,7 @@
         restoring: false,
         searchIndex: -1,
         searchResults: [],
+        minimap: null,
       };
 
       const kindColors = {
@@ -3547,6 +3572,113 @@
         });
 
         applyCyTheme();
+        setupMinimap();
+      }
+
+      function setupMinimap() {
+        const canvas = $("minimap");
+        if (!canvas || !state.cy) return;
+        const resize = () => {
+          const ratio = window.devicePixelRatio || 1;
+          const rect = canvas.getBoundingClientRect();
+          canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+          canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+          scheduleMinimap();
+        };
+        let scheduled = false;
+        const scheduleMinimap = () => {
+          if (scheduled) return;
+          scheduled = true;
+          requestAnimationFrame(() => {
+            scheduled = false;
+            drawMinimap();
+          });
+        };
+        window.addEventListener("resize", resize);
+        resize();
+        state.cy.on("render viewport", scheduleMinimap);
+        canvas.addEventListener("click", (event) => {
+          const minimap = state.minimap;
+          if (!minimap || !state.cy) return;
+          const rect = canvas.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          const targetX = (x - minimap.offsetX) / minimap.scale;
+          const targetY = (y - minimap.offsetY) / minimap.scale;
+          const pan = state.cy.pan();
+          state.cy.pan({
+            x: pan.x + state.cy.width() / 2 - targetX,
+            y: pan.y + state.cy.height() / 2 - targetY,
+          });
+        });
+        state.scheduleMinimap = scheduleMinimap;
+      }
+
+      function drawMinimap() {
+        const canvas = $("minimap");
+        const cy = state.cy;
+        if (!canvas || !cy) return;
+        const ratio = window.devicePixelRatio || 1;
+        const width = canvas.width / ratio;
+        const height = canvas.height / ratio;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        context.clearRect(0, 0, width, height);
+
+        const nodes = cy.nodes().filter((node) => node.visible());
+        if (nodes.length === 0) {
+          state.minimap = null;
+          return;
+        }
+
+        let minX = Number.POSITIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+        for (const node of nodes) {
+          const position = node.renderedPosition();
+          minX = Math.min(minX, position.x);
+          minY = Math.min(minY, position.y);
+          maxX = Math.max(maxX, position.x);
+          maxY = Math.max(maxY, position.y);
+        }
+
+        const pad = 7;
+        const graphWidth = Math.max(1, maxX - minX);
+        const graphHeight = Math.max(1, maxY - minY);
+        const scale = Math.min(
+          (width - pad * 2) / graphWidth,
+          (height - pad * 2) / graphHeight,
+        );
+        const offsetX = pad + ((width - pad * 2) - graphWidth * scale) / 2 - minX * scale;
+        const offsetY = pad + ((height - pad * 2) - graphHeight * scale) / 2 - minY * scale;
+        state.minimap = { scale, offsetX, offsetY };
+
+        for (const node of nodes) {
+          const position = node.renderedPosition();
+          context.fillStyle = node.data("color") || "#94a3b8";
+          context.globalAlpha = 0.9;
+          context.fillRect(
+            offsetX + position.x * scale - 1,
+            offsetY + position.y * scale - 1,
+            2,
+            2,
+          );
+        }
+        context.globalAlpha = 1;
+
+        const accent =
+          document.documentElement.dataset.theme === "light" ? "#4f46e5" : "#8aa4ff";
+        context.strokeStyle = accent;
+        context.lineWidth = 1;
+        context.fillStyle = "rgba(138, 164, 255, 0.12)";
+        const viewportX = offsetX;
+        const viewportY = offsetY;
+        const viewportWidth = cy.width() * scale;
+        const viewportHeight = cy.height() * scale;
+        context.fillRect(viewportX, viewportY, viewportWidth, viewportHeight);
+        context.strokeRect(viewportX, viewportY, viewportWidth, viewportHeight);
       }
 
       function applyCyTheme() {
