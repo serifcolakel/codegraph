@@ -6,3 +6,7 @@ export class Calculator {
     return add(a, b)
   }
 }
+
+function unusedLocal(): number {
+  return 1
+}

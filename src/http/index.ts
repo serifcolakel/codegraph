@@ -9,6 +9,8 @@ import {
 } from "@effect/platform"
 import { NodeHttpServer } from "@effect/platform-node"
 import { Effect, Either, Schema } from "effect"
+import { Analytics } from "../services/Analytics.js"
+import { ChangeImpact } from "../services/ChangeImpact.js"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { Indexer } from "../services/Indexer.js"
 import { IndexJobRunner } from "../services/IndexJobRunner.js"
@@ -21,6 +23,8 @@ export const makeHttpRouter = Effect.gen(function* () {
   const indexer = yield* Indexer
   const jobs = yield* IndexJobs
   const jobRunner = yield* IndexJobRunner
+  const analytics = yield* Analytics
+  const changeImpact = yield* ChangeImpact
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
 
@@ -78,7 +82,100 @@ export const makeHttpRouter = Effect.gen(function* () {
       })
     ),
 
-    // 2. GET /api/jobs - recent async indexing jobs
+    // 2. GET /api/analytics?repo=&analysis=&level=&limit=
+    HttpRouter.get(
+      "/api/analytics",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const repoId = url.searchParams.get("repo")
+        const analysis = url.searchParams.get("analysis") ?? "hotspots"
+        const level = url.searchParams.get("level") === "file" ? "file" : "symbol"
+        const rawLimit = parseInt(url.searchParams.get("limit") ?? "", 10)
+        const limit = Number.isFinite(rawLimit) ? rawLimit : undefined
+
+        if (!repoId) {
+          return yield* HttpServerResponse.json(
+            { error: "Query parameter 'repo' is required." },
+            { status: 400 }
+          )
+        }
+
+        const result = yield* Effect.gen(function* () {
+          switch (analysis) {
+            case "pagerank":
+              return yield* analytics.rank(repoId, {
+                algorithm: "pagerank",
+                ...(limit !== undefined ? { limit } : {})
+              })
+            case "in_degree":
+              return yield* analytics.rank(repoId, {
+                algorithm: "in_degree",
+                ...(limit !== undefined ? { limit } : {})
+              })
+            case "complexity":
+              return yield* analytics.rank(repoId, {
+                algorithm: "complexity",
+                ...(limit !== undefined ? { limit } : {})
+              })
+            case "hotspots":
+              return yield* analytics.hotspots(repoId, {
+                ...(limit !== undefined ? { limit } : {})
+              })
+            case "dead_code":
+              return yield* analytics.deadCode(repoId, {
+                ...(limit !== undefined ? { limit } : {})
+              })
+            case "cycles":
+              return yield* analytics.cycles(repoId, {
+                level,
+                ...(limit !== undefined ? { limit } : {})
+              })
+            default:
+              return yield* Effect.fail(
+                new Error(
+                  "Unsupported analysis. Use pagerank, in_degree, complexity, hotspots, dead_code or cycles."
+                )
+              )
+          }
+        }).pipe(Effect.either)
+
+        if (Either.isLeft(result)) {
+          return yield* HttpServerResponse.json({ error: result.left.message }, { status: 400 })
+        }
+        return yield* HttpServerResponse.json({
+          repoId,
+          analysis,
+          ...(analysis === "cycles" ? { level } : {}),
+          results: result.right
+        })
+      })
+    ),
+
+    // 3. GET /api/changes?repo=&base=
+    HttpRouter.get(
+      "/api/changes",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const repoId = url.searchParams.get("repo")
+        const base = url.searchParams.get("base") ?? undefined
+        if (!repoId) {
+          return yield* HttpServerResponse.json(
+            { error: "Query parameter 'repo' is required." },
+            { status: 400 }
+          )
+        }
+        const result = yield* changeImpact.detect(repoId, base).pipe(Effect.either)
+        if (Either.isLeft(result)) {
+          const status = result.left._tag === "NotFoundError" ? 404 : 500
+          return yield* HttpServerResponse.json({ error: result.left.message }, { status })
+        }
+        return yield* HttpServerResponse.json(result.right)
+      })
+    ),
+
+    // 4. GET /api/jobs - recent async indexing jobs
     HttpRouter.get(
       "/api/jobs",
       Effect.gen(function* () {

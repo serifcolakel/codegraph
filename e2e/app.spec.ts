@@ -54,6 +54,31 @@ test.describe("CodeGraph web UI", () => {
     await expect(page.getByTestId("details-modal")).not.toBeVisible()
   })
 
+  test("shows analytics insights", async ({ page }) => {
+    await page.getByTestId("insights-button").click()
+    await expect(page.getByTestId("insights-modal")).toBeVisible()
+    await expect(page.getByTestId("insights-body")).toContainText("Languages")
+    await expect(page.getByTestId("insights-body")).toContainText("typescript")
+
+    await page.getByTestId("insights-tab-hotspots").click()
+    await expect(page.getByTestId("insights-body")).toContainText("add")
+
+    await page.getByTestId("insights-tab-complexity").click()
+    await expect(page.getByTestId("insights-body")).toContainText("cx=")
+
+    await page.getByTestId("insights-tab-dead-code").click()
+    await expect(page.getByTestId("insights-body")).toContainText("unusedLocal")
+
+    await page.getByTestId("insights-tab-cycles").click()
+    await expect(page.getByTestId("insights-body")).toContainText(/No cycles found|Cycle/)
+
+    await page.getByTestId("insights-tab-changes").click()
+    await expect(page.getByTestId("insights-body")).toContainText("Base ref")
+
+    await page.getByTestId("insights-footer-close").click()
+    await expect(page.getByTestId("insights-modal")).not.toBeVisible()
+  })
+
   test("renders the file graph with view stats", async ({ page }) => {
     await expect(page.getByTestId("dock")).toBeVisible()
     await expect(page.getByTestId("view-mode")).toHaveText("File graph")

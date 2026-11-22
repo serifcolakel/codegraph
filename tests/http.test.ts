@@ -6,7 +6,10 @@ import { it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { describe, expect } from "vitest"
 import { makeHttpRouter } from "../src/http/index.js"
+import { AnalyticsLive } from "../src/services/Analytics.js"
+import { ChangeImpactLive } from "../src/services/ChangeImpact.js"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
+import { GitChangesLive } from "../src/services/GitChanges.js"
 import { GraphQueryLive } from "../src/services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
 import { IndexJobRunnerLive } from "../src/services/IndexJobRunner.js"
@@ -75,7 +78,7 @@ describe("HTTP API & visualization", () => {
             expect(Array.isArray(architectureRes.packages)).toBe(true)
             expect(Array.isArray(architectureRes.hotspots)).toBe(true)
 
-            // 6. Test GET /api/graph?repo=&level=file
+            // 8. Test GET /api/graph?repo=&level=file
             const graphRes = yield* Effect.tryPromise(() =>
               fetch(
                 `http://127.0.0.1:${TEST_PORT}/api/graph?repo=${encodeURIComponent(report.repoId)}&level=file`
@@ -84,7 +87,7 @@ describe("HTTP API & visualization", () => {
             expect(graphRes.nodes).toBeDefined()
             expect(graphRes.nodes.length).toBe(1)
 
-            // 7. Test GET /api/search?q=greet
+            // 9. Test GET /api/search?q=greet
             const searchRes = yield* Effect.tryPromise(() =>
               fetch(`http://127.0.0.1:${TEST_PORT}/api/search?q=greet`).then((r) => r.json())
             )
@@ -92,14 +95,14 @@ describe("HTTP API & visualization", () => {
             expect(searchRes.length).toBeGreaterThan(0)
             expect(searchRes[0].name).toBe("greet")
 
-            // 8. Test GET / - HTML serving
+            // 10. Test GET / - HTML serving
             const htmlRes = yield* Effect.tryPromise(() =>
               fetch(`http://127.0.0.1:${TEST_PORT}/`).then((r) => r.text())
             )
             expect(htmlRes).toContain("CodeGraph")
             expect(htmlRes).toContain("cytoscape")
 
-            // 9. POST /api/reindex refreshes an existing repository
+            // 11. POST /api/reindex refreshes an existing repository
             const reindexRes = yield* Effect.tryPromise(() =>
               fetch(`http://127.0.0.1:${TEST_PORT}/api/reindex`, {
                 method: "POST",
@@ -110,7 +113,7 @@ describe("HTTP API & visualization", () => {
             expect(reindexRes.filesIndexed).toBe(0)
             expect(reindexRes.filesSkipped).toBe(1)
 
-            // 10. POST /api/index indexes a new folder from the web UI/API
+            // 12. POST /api/index indexes a new folder from the web UI/API
             const secondDir = path.join(tmpDir, "second-repo")
             yield* fs.makeDirectory(secondDir, { recursive: true })
             yield* fs.writeFileString(path.join(secondDir, "other.ts"), `export const answer = 42;`)
@@ -129,7 +132,7 @@ describe("HTTP API & visualization", () => {
             )
             expect(reposAfter.length).toBe(2)
 
-            // 11. DELETE /api/repos/:id removes an index without touching files
+            // 13. DELETE /api/repos/:id removes an index without touching files
             const secondRepo = reposAfter.find(
               (repo: { name: string }) => repo.name === "second-repo"
             )
@@ -158,7 +161,7 @@ describe("HTTP API & visualization", () => {
             )
             expect(deleteMissing).toBe(404)
 
-            // 12. Async indexing returns a job and exposes its status
+            // 14. Async indexing returns a job and exposes its status
             const asyncDir = path.join(tmpDir, "async-repo")
             yield* fs.makeDirectory(asyncDir, { recursive: true })
             yield* fs.writeFileString(path.join(asyncDir, "async.ts"), "export const value = 1;")
@@ -207,6 +210,10 @@ describe("HTTP API & visualization", () => {
           const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
           const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
           const JobsLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
+          const AnalyticsServiceLive = AnalyticsLive.pipe(Layer.provide(SqlLive))
+          const ChangeImpactServiceLive = ChangeImpactLive.pipe(
+            Layer.provide(Layer.mergeAll(StoreLive, QueryLive, GitChangesLive))
+          )
           const PlatformLive = Layer.merge(NodeFileSystem.layer, NodePath.layer)
           const WalkerLive = FileWalkerLive.pipe(Layer.provide(PlatformLive))
           const IndexerTestLive = IndexerLive.pipe(
@@ -221,6 +228,8 @@ describe("HTTP API & visualization", () => {
             QueryLive,
             JobsLive,
             RunnerLive,
+            AnalyticsServiceLive,
+            ChangeImpactServiceLive,
             PlatformLive
           )
         })()

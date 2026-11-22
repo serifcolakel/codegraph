@@ -249,6 +249,99 @@
         color: var(--text-faint);
       }
 
+      .insight-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 10px 18px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .insight-tab {
+        padding: 6px 10px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-dim);
+        font: inherit;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .insight-tab:hover {
+        color: var(--text);
+        background: var(--surface-soft);
+      }
+
+      .insight-tab.active {
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .insight-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .insight-item {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--surface-soft);
+        color: inherit;
+        font: inherit;
+        font-size: 0.75rem;
+        text-align: left;
+      }
+
+      button.insight-item {
+        cursor: pointer;
+      }
+
+      button.insight-item:hover {
+        border-color: var(--line-strong);
+        background: var(--surface);
+      }
+
+      .insight-item-title {
+        font-weight: 600;
+      }
+
+      .insight-item-meta {
+        color: var(--text-faint);
+        font-size: 0.7rem;
+        text-align: right;
+      }
+
+      .insight-empty {
+        color: var(--text-faint);
+        font-size: 0.75rem;
+      }
+
+      .insight-toolbar {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .insight-toolbar input {
+        height: 34px;
+        min-width: 180px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--surface-soft);
+        color: var(--text);
+        font: inherit;
+        font-size: 0.78rem;
+      }
+
       .dock {
         position: absolute;
         left: 12px;
@@ -1898,6 +1991,20 @@
             <path d="M12 11v6M12 7.5h.01" />
           </svg>
         </button>
+
+        <button
+          type="button"
+          id="insightsBtn"
+          data-testid="insights-button"
+          class="icon-btn"
+          data-tip="Insights"
+          title="Graph insights"
+          aria-label="Graph insights"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M5 20V10M12 20V4M19 20v-7" />
+          </svg>
+        </button>
       </aside>
 
           <div class="graph-topbar">
@@ -2295,6 +2402,46 @@
       </div>
     </dialog>
 
+    <dialog
+      id="insightsModal"
+      class="modal details-modal"
+      data-testid="insights-modal"
+      aria-labelledby="insightsTitle"
+    >
+      <div class="modal-header">
+        <div>
+          <div id="insightsTitle" class="modal-title">Insights</div>
+          <div class="modal-sub">Architecture, hotspots, complexity, dead code, cycles and changes.</div>
+        </div>
+        <button
+          type="button"
+          id="insightsCloseBtn"
+          class="icon-btn"
+          data-testid="insights-close"
+          aria-label="Close insights"
+          title="Close"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="insight-tabs" role="tablist" aria-label="Insight views">
+        <button type="button" class="insight-tab active" data-insight-tab="architecture" data-testid="insights-tab-architecture" role="tab" aria-selected="true">Architecture</button>
+        <button type="button" class="insight-tab" data-insight-tab="hotspots" data-testid="insights-tab-hotspots" role="tab" aria-selected="false">Hotspots</button>
+        <button type="button" class="insight-tab" data-insight-tab="complexity" data-testid="insights-tab-complexity" role="tab" aria-selected="false">Complexity</button>
+        <button type="button" class="insight-tab" data-insight-tab="dead_code" data-testid="insights-tab-dead-code" role="tab" aria-selected="false">Dead code</button>
+        <button type="button" class="insight-tab" data-insight-tab="cycles" data-testid="insights-tab-cycles" role="tab" aria-selected="false">Cycles</button>
+        <button type="button" class="insight-tab" data-insight-tab="changes" data-testid="insights-tab-changes" role="tab" aria-selected="false">Changes</button>
+      </div>
+      <div class="modal-body" id="insightsBody" data-testid="insights-body"></div>
+      <div class="modal-footer">
+        <button type="button" id="insightsFooterBtn" class="ghost-btn" data-testid="insights-footer-close">
+          Close
+        </button>
+      </div>
+    </dialog>
+
     <div
       id="toast" data-testid="toast"
       class="toast"
@@ -2610,6 +2757,259 @@
 
       function closeDetailsModal() {
         const dialog = $("detailsModal");
+        if (typeof dialog.close === "function") dialog.close();
+        else dialog.removeAttribute("open");
+      }
+
+      let insightTab = "architecture";
+
+      function insightItem(title, meta, symbolId) {
+        const tag = symbolId ? "button" : "div";
+        const type = symbolId ? ' type="button"' : "";
+        const id = symbolId
+          ? ` data-symbol-id="${escapeHtml(symbolId)}"`
+          : "";
+        return `<${tag}${type} class="insight-item"${id}><span class="insight-item-title">${escapeHtml(title)}</span><span class="insight-item-meta">${escapeHtml(meta)}</span></${tag}>`;
+      }
+
+      function insightEmpty(text) {
+        return `<div class="insight-empty">${escapeHtml(text)}</div>`;
+      }
+
+      function renderArchitectureInsight(data) {
+        const languages = Object.entries(data.languages ?? {});
+        const languageBody =
+          languages.length > 0
+            ? `<div class="insight-list">${languages
+                .map(([language, count]) => insightItem(language, `${count} files`))
+                .join("")}</div>`
+            : insightEmpty("No languages recorded.");
+
+        const packages =
+          Array.isArray(data.packages) && data.packages.length > 0
+            ? `<div class="insight-list">${data.packages
+                .map((pkg) =>
+                  insightItem(pkg.name, `${pkg.files} files · ${pkg.symbols} symbols`),
+                )
+                .join("")}</div>`
+            : insightEmpty("No packages recorded.");
+
+        const entries =
+          Array.isArray(data.entryPoints) && data.entryPoints.length > 0
+            ? `<div class="insight-list">${data.entryPoints
+                .map((symbol) =>
+                  insightItem(
+                    `${symbol.name} (${symbol.kind})`,
+                    `${symbol.filePath}:${symbol.startLine}`,
+                    symbol.id,
+                  ),
+                )
+                .join("")}</div>`
+            : insightEmpty("No entry points found.");
+
+        const hotspots =
+          Array.isArray(data.hotspots) && data.hotspots.length > 0
+            ? `<div class="insight-list">${data.hotspots
+                .map((symbol) =>
+                  insightItem(
+                    `${symbol.name} (${symbol.kind})`,
+                    `${symbol.filePath}:${symbol.startLine} · in=${symbol.inDegree}`,
+                    symbol.id,
+                  ),
+                )
+                .join("")}</div>`
+            : insightEmpty("No hotspots yet.");
+
+        $("insightsBody").innerHTML = [
+          `<div class="details-section" data-testid="insights-architecture"><h3>Languages</h3>${languageBody}</div>`,
+          `<div class="details-section"><h3>Packages</h3>${packages}</div>`,
+          `<div class="details-section"><h3>Entry points</h3>${entries}</div>`,
+          `<div class="details-section"><h3>Hotspots</h3>${hotspots}</div>`,
+        ].join("");
+      }
+
+      function renderAnalyticsInsight(tab, results) {
+        if (tab === "cycles") {
+          if (!Array.isArray(results) || results.length === 0) {
+            $("insightsBody").innerHTML = insightEmpty("No cycles found.");
+            return;
+          }
+          const groups = results
+            .map(
+              (group, index) => `
+                <div class="details-section">
+                  <h3>Cycle ${index + 1} · size ${group.size} · ${group.level}</h3>
+                  <div class="insight-list">${group.members
+                    .map((member) =>
+                      insightItem(
+                        member.name || member.filePath,
+                        member.startLine ? `${member.filePath}:${member.startLine}` : member.filePath,
+                        member.id,
+                      ),
+                    )
+                    .join("")}</div>
+                </div>`,
+            )
+            .join("");
+          $("insightsBody").innerHTML = groups;
+          return;
+        }
+
+        if (!Array.isArray(results) || results.length === 0) {
+          $("insightsBody").innerHTML = insightEmpty(
+            tab === "dead_code" ? "No dead-code candidates." : "No results.",
+          );
+          return;
+        }
+
+        const items = results
+          .map((symbol) => {
+            const title = `${symbol.name} (${symbol.kind})`;
+            let meta;
+            if (tab === "hotspots") {
+              meta = `${symbol.filePath}:${symbol.startLine} · score=${symbol.score} · in=${symbol.fanIn} out=${symbol.fanOut} · cx=${symbol.cyclomatic}`;
+            } else if (tab === "complexity") {
+              meta = `${symbol.filePath}:${symbol.startLine} · cx=${symbol.cyclomatic} cog=${symbol.cognitive} · in=${symbol.inDegree} out=${symbol.outDegree}`;
+            } else if (tab === "dead_code") {
+              meta = `${symbol.filePath}:${symbol.startLine} · ${symbol.language}`;
+            } else {
+              meta = `${symbol.filePath}:${symbol.startLine} · score=${symbol.score}`;
+            }
+            return insightItem(title, meta, symbol.id);
+          })
+          .join("");
+
+        $("insightsBody").innerHTML = `<div class="insight-list">${items}</div>`;
+      }
+
+      function renderChangesInsight(report) {
+        const changed =
+          report.changedFiles.length > 0
+            ? `<div class="insight-list">${report.changedFiles
+                .map((filePath) =>
+                  insightItem(
+                    filePath,
+                    report.indexedFiles.includes(filePath) ? "indexed" : "not indexed",
+                  ),
+                )
+                .join("")}</div>`
+            : insightEmpty("No changed files.");
+
+        const affected =
+          report.affectedSymbols.length > 0
+            ? `<div class="insight-list">${report.affectedSymbols
+                .map((symbol) =>
+                  insightItem(
+                    `${symbol.name} (${symbol.kind})`,
+                    `${symbol.filePath}:${symbol.startLine}`,
+                    symbol.id,
+                  ),
+                )
+                .join("")}</div>`
+            : insightEmpty("No indexed symbols changed.");
+
+        const impacted =
+          report.impactedSymbols.length > 0
+            ? `<div class="insight-list">${report.impactedSymbols
+                .map((symbol) =>
+                  insightItem(
+                    `${symbol.name} (${symbol.kind})`,
+                    `${symbol.filePath}:${symbol.startLine} · ← ${symbol.referencedBy.join(", ")}`,
+                    symbol.id,
+                  ),
+                )
+                .join("")}</div>`
+            : insightEmpty("No reverse dependencies found.");
+
+        $("insightsChanges").innerHTML = [
+          `<div class="details-section"><h3>Changed files</h3>${changed}</div>`,
+          `<div class="details-section"><h3>Affected symbols</h3>${affected}</div>`,
+          `<div class="details-section"><h3>Blast radius</h3>${impacted}</div>`,
+        ].join("");
+      }
+
+      async function loadChangesInsight() {
+        const base = $("insightBase") ? $("insightBase").value.trim() : "";
+        const target = $("insightsChanges");
+        if (!target) return;
+        target.innerHTML = insightEmpty("Loading changes…");
+        try {
+          const query = `/api/changes?repo=${encodeURIComponent(state.repoId)}${
+            base ? `&base=${encodeURIComponent(base)}` : ""
+          }`;
+          const report = await fetchJson(query);
+          renderChangesInsight(report);
+        } catch (error) {
+          target.innerHTML = insightEmpty(`Could not load changes: ${error.message}`);
+        }
+      }
+
+      async function loadInsight(tab) {
+        const body = $("insightsBody");
+        if (!state.repoId) {
+          body.innerHTML = insightEmpty("Select a repository first.");
+          return;
+        }
+
+        if (tab === "changes") {
+          body.innerHTML = `
+            <div class="insight-toolbar">
+              <label class="field" for="insightBase">
+                <span>Base ref (optional)</span>
+                <input id="insightBase" placeholder="main" autocomplete="off" spellcheck="false" />
+              </label>
+              <button type="button" id="insightRunChanges" class="info-btn" data-testid="insights-run-changes">Check</button>
+            </div>
+            <div id="insightsChanges"></div>`;
+          $("insightRunChanges").addEventListener("click", () => {
+            loadChangesInsight().catch(() => {});
+          });
+          await loadChangesInsight();
+          return;
+        }
+
+        body.innerHTML = insightEmpty("Loading…");
+        try {
+          if (tab === "architecture") {
+            const data = await fetchJson(
+              `/api/architecture?repo=${encodeURIComponent(state.repoId)}`,
+            );
+            renderArchitectureInsight(data);
+            return;
+          }
+          const level = tab === "cycles" ? "&level=symbol" : "";
+          const data = await fetchJson(
+            `/api/analytics?repo=${encodeURIComponent(state.repoId)}&analysis=${encodeURIComponent(tab)}&limit=20${level}`,
+          );
+          renderAnalyticsInsight(tab, data.results);
+        } catch (error) {
+          body.innerHTML = insightEmpty(`Could not load insights: ${error.message}`);
+        }
+      }
+
+      function setInsightTab(tab) {
+        insightTab = tab;
+        for (const button of document.querySelectorAll("[data-insight-tab]")) {
+          const active = button.getAttribute("data-insight-tab") === tab;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-selected", String(active));
+        }
+        loadInsight(tab).catch(() => {});
+      }
+
+      async function openInsightsModal() {
+        if (!state.repoId) {
+          toast("Select a repository first.", true);
+          return;
+        }
+        const dialog = $("insightsModal");
+        if (typeof dialog.showModal === "function") dialog.showModal();
+        else dialog.setAttribute("open", "");
+        setInsightTab("architecture");
+      }
+
+      function closeInsightsModal() {
+        const dialog = $("insightsModal");
         if (typeof dialog.close === "function") dialog.close();
         else dialog.removeAttribute("open");
       }
@@ -3787,6 +4187,28 @@
       });
       $("indexModal").addEventListener("click", (event) => {
         if (event.target === $("indexModal")) closeIndexModal();
+      });
+
+      $("insightsBtn").addEventListener("click", () => {
+        openInsightsModal().catch(() => {});
+      });
+      $("insightsCloseBtn").addEventListener("click", closeInsightsModal);
+      $("insightsFooterBtn").addEventListener("click", closeInsightsModal);
+      $("insightsModal").addEventListener("click", (event) => {
+        if (event.target === $("insightsModal")) closeInsightsModal();
+      });
+      for (const button of document.querySelectorAll("[data-insight-tab]")) {
+        button.addEventListener("click", () => {
+          setInsightTab(button.getAttribute("data-insight-tab") || "architecture");
+        });
+      }
+      $("insightsBody").addEventListener("click", (event) => {
+        const target = event.target.closest("[data-symbol-id]");
+        if (!target) return;
+        const symbolId = target.getAttribute("data-symbol-id");
+        if (!symbolId) return;
+        closeInsightsModal();
+        loadSymbolNeighborhood(symbolId).catch(() => {});
       });
 
       $("detailsBtn").addEventListener("click", () => {
