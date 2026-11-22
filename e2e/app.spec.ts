@@ -108,6 +108,16 @@ test.describe("CodeGraph web UI", () => {
     await expect(page.getByTestId("panel-title")).toContainText("Calculator")
   })
 
+  test("searches documentation sections", async ({ page }) => {
+    await page.getByTestId("search-input").fill("Calculator Guide")
+    await expect(page.getByTestId("search-dropdown")).toHaveClass(/open/)
+    const results = page.getByTestId("search-result")
+    await expect(results.first()).toBeVisible()
+    await results.first().click()
+    await expect(page.getByTestId("panel-title")).toContainText("Calculator Guide")
+    await expect(page.getByTestId("symbol-panel")).toContainText("doc")
+  })
+
   test("switches between file and symbol views", async ({ page }) => {
     await page.getByTestId("view-symbols").click()
     await expect(page.getByTestId("view-mode")).toHaveText("Top symbols")

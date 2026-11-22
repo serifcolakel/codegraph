@@ -8,7 +8,8 @@ export const SymbolKind = Schema.Literal(
   "const",
   "method",
   "property",
-  "enum"
+  "enum",
+  "doc"
 )
 export type SymbolKind = typeof SymbolKind.Type
 
@@ -36,7 +37,8 @@ export const EdgeKind = Schema.Literal(
   "call_reference",
   "usage",
   "throws",
-  "raises"
+  "raises",
+  "mentions"
 )
 export type EdgeKind = typeof EdgeKind.Type
 

@@ -12,6 +12,7 @@ export type Language =
   | "ruby"
   | "php"
   | "scala"
+  | "markdown"
 
 const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
   ".ts": "typescript",
@@ -41,7 +42,10 @@ const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
   ".rb": "ruby",
   ".php": "php",
   ".scala": "scala",
-  ".sc": "scala"
+  ".sc": "scala",
+  ".md": "markdown",
+  ".markdown": "markdown",
+  ".mdx": "markdown"
 }
 
 export const SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(Object.keys(EXTENSION_LANGUAGE))
@@ -84,5 +88,7 @@ export const languageLabel = (language: Language): string => {
       return "PHP"
     case "scala":
       return "Scala"
+    case "markdown":
+      return "Markdown"
   }
 }

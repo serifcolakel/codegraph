@@ -151,7 +151,17 @@ export const SearchGraphInput = Schema.Struct({
   namePattern: Schema.optional(Schema.String),
   regex: Schema.optional(Schema.Boolean),
   kind: Schema.optional(
-    Schema.Literal("function", "class", "interface", "type", "const", "method", "property", "enum")
+    Schema.Literal(
+      "function",
+      "class",
+      "interface",
+      "type",
+      "const",
+      "method",
+      "property",
+      "enum",
+      "doc"
+    )
   ),
   filePattern: Schema.optional(Schema.String),
   repoId: Schema.optional(Schema.String),

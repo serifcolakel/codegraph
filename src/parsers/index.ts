@@ -3,6 +3,7 @@ import { parseCsharpFile } from "./csharp.js"
 import { parseGoFile } from "./go.js"
 import { parseJavaFile } from "./java.js"
 import { parseKotlinFile } from "./kotlin.js"
+import { parseMarkdownFile } from "./markdown.js"
 import { parsePythonFile } from "./python.js"
 import { parseRustFile } from "./rust.js"
 import type { SourceParser } from "./types.js"
@@ -16,7 +17,8 @@ const AST_PARSERS: Partial<Record<Language, SourceParser>> = {
   rust: { parse: parseRustFile },
   java: { parse: parseJavaFile },
   kotlin: { parse: parseKotlinFile },
-  csharp: { parse: parseCsharpFile }
+  csharp: { parse: parseCsharpFile },
+  markdown: { parse: parseMarkdownFile }
 }
 
 export const astParserFor = (language: Language): SourceParser | undefined => AST_PARSERS[language]

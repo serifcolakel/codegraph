@@ -2484,6 +2484,7 @@
         method: "#a78bfa",
         property: "#94a3b8",
         enum: "#2dd4bf",
+        doc: "#f59e0b",
       };
 
       const edgeColors = {
@@ -2493,10 +2494,12 @@
         implements: "#fbbf24",
         contains: "#64748b",
         reference: "#f472b6",
+        mentions: "#f59e0b",
       };
 
       const nodeIconPaths = {
         file: '<path d="M6 2.5h7l5 5v14H6z"/><path d="M13 2.5v5h5"/>',
+        doc: '<path d="M5 3.5h10a3 3 0 0 1 3 3v14H8a3 3 0 0 1-3-3z"/><path d="M8 8h7M8 12h7M8 16h4"/>',
         class:
           '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 10h8M8 14h5"/>',
         function:
@@ -3411,6 +3414,7 @@
         method: "Method",
         property: "Property",
         enum: "Enum",
+        doc: "Doc",
       };
 
       function renderLegend() {
