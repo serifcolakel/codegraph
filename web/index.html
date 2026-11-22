@@ -251,24 +251,25 @@
 
       .dock {
         position: absolute;
-        left: 14px;
-        top: 14px;
-        bottom: 14px;
-        z-index: 60;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 6;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 8px;
-        border: 1px solid var(--line-strong);
-        border-radius: 18px;
-        background: var(--surface);
-        backdrop-filter: blur(24px) saturate(150%);
-        -webkit-backdrop-filter: blur(24px) saturate(150%);
-        box-shadow:
-          0 1px 0 rgba(255, 255, 255, 0.08) inset,
-          0 18px 50px -26px rgba(0, 0, 0, 0.75);
+        gap: 5px;
+        padding: 7px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(17, 24, 39, 0.5);
+        backdrop-filter: blur(18px) saturate(140%);
+        -webkit-backdrop-filter: blur(18px) saturate(140%);
+        box-shadow: 0 14px 34px -22px rgba(0, 0, 0, 0.7);
+      }
+
+      [data-theme="light"] .dock {
+        background: rgba(255, 255, 255, 0.6);
       }
 
       .dock .icon-btn {
@@ -753,7 +754,7 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr) 370px;
         min-height: 0;
-        padding: 16px 22px 22px 92px;
+        padding: 16px 22px 22px;
         gap: 16px;
       }
 
@@ -1650,15 +1651,13 @@
         .workspace {
           grid-template-columns: 1fr;
           grid-template-rows: minmax(0, 1fr) 44vh;
-          padding: 12px 14px 14px 78px;
+          padding: 12px 14px 14px;
           gap: 12px;
         }
         .dock {
-          left: 10px;
-          top: 12px;
-          bottom: 12px;
-          gap: 5px;
-          padding: 6px;
+          left: 8px;
+          gap: 4px;
+          padding: 5px;
         }
         .dock .icon-btn {
           width: 34px;
@@ -1709,6 +1708,12 @@
   </head>
   <body>
     <div class="app">
+
+
+      <main class="workspace">
+        <section class="graph-panel" aria-label="Graph">
+          <div id="cy" data-testid="graph-canvas"></div>
+
       <aside class="dock" data-testid="dock" aria-label="Controls">
         <button
           type="button"
@@ -1870,10 +1875,6 @@
           </svg>
         </button>
       </aside>
-
-      <main class="workspace">
-        <section class="graph-panel" aria-label="Graph">
-          <div id="cy" data-testid="graph-canvas"></div>
 
           <div class="graph-topbar">
             <div class="topbar-main">
