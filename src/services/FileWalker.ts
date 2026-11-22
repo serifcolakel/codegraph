@@ -179,7 +179,8 @@ export const FileWalkerLive = Layer.effect(
                 results.push({
                   path: normalizedRelPath,
                   absolutePath: fullPath,
-                  hash
+                  hash,
+                  sizeBytes: fileContent.byteLength
                 })
               }
             }

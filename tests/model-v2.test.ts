@@ -155,9 +155,16 @@ class FundService:
         ])
       )
 
+      const repoColumns = yield* sql<{ name: string }>`PRAGMA table_info(repos);`
+      expect(repoColumns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(["indexed_at", "index_duration_ms"])
+      )
+
       const fileColumns = yield* sql<{ name: string }>`PRAGMA table_info(files);`
       const fileColumnNames = fileColumns.map((column) => column.name)
-      expect(fileColumnNames).toEqual(expect.arrayContaining(["language", "parse_status"]))
+      expect(fileColumnNames).toEqual(
+        expect.arrayContaining(["language", "parse_status", "size_bytes"])
+      )
 
       const ftsColumns = yield* sql<{ name: string }>`PRAGMA table_info(symbols_fts);`
       expect(ftsColumns.map((column) => column.name)).toContain("tokens")

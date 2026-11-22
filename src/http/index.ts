@@ -36,11 +36,39 @@ export const makeHttpRouter = Effect.gen(function* () {
     HttpRouter.get(
       "/api/repos",
       Effect.gen(function* () {
-        const repos = yield* store
-          .listRepos()
-          .pipe(
-            Effect.catchAll((e) => HttpServerResponse.json({ error: e.message }, { status: 500 }))
+        const reposResult = yield* store.listRepos().pipe(Effect.either)
+        if (Either.isLeft(reposResult)) {
+          return yield* HttpServerResponse.json(
+            { error: reposResult.left.message },
+            { status: 500 }
           )
+        }
+
+        const repos = []
+        for (const repo of reposResult.right) {
+          const stats = yield* store.getStats(repo.id).pipe(
+            Effect.orElseSucceed(() => ({
+              repos: 0,
+              files: 0,
+              symbols: 0,
+              edges: 0,
+              sourceBytes: 0
+            }))
+          )
+          repos.push({
+            id: repo.id,
+            name: repo.name,
+            rootPath: repo.rootPath,
+            ...(repo.indexedAt ? { indexedAt: repo.indexedAt } : {}),
+            ...(repo.indexDurationMs !== undefined
+              ? { indexDurationMs: repo.indexDurationMs }
+              : {}),
+            files: stats.files,
+            symbols: stats.symbols,
+            edges: stats.edges,
+            sourceBytes: stats.sourceBytes
+          })
+        }
         return yield* HttpServerResponse.json(repos)
       })
     ),

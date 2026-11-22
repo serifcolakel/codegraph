@@ -587,7 +587,7 @@ export const createMcpServer = <R>(
               for (const repo of repos) {
                 const stats = yield* store.getStats(repo.id)
                 lines.push(
-                  `${repo.name} — ${repo.id}\n  root: ${repo.rootPath}\n  files=${stats.files} symbols=${stats.symbols} edges=${stats.edges}`
+                  `${repo.name} — ${repo.id}\n  root: ${repo.rootPath}\n  files=${stats.files} symbols=${stats.symbols} edges=${stats.edges} source=${stats.sourceBytes} bytes\n  indexed=${repo.indexedAt ?? "never"}${repo.indexDurationMs !== undefined ? ` (${repo.indexDurationMs}ms)` : ""}`
                 )
               }
               return lines.join("\n")

@@ -48,6 +48,10 @@ describe("HTTP API & visualization", () => {
             expect(Array.isArray(reposRes)).toBe(true)
             expect(reposRes.length).toBeGreaterThan(0)
             expect(reposRes[0].name).toBe("http-test-repo")
+            expect(reposRes[0].files).toBe(1)
+            expect(reposRes[0].sourceBytes).toBeGreaterThan(0)
+            expect(typeof reposRes[0].indexedAt).toBe("string")
+            expect(reposRes[0].indexDurationMs).toBeGreaterThanOrEqual(0)
 
             // 4. Test GET /api/graph?repo=&level=file
             const graphRes = yield* Effect.tryPromise(() =>

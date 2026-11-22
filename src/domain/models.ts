@@ -43,7 +43,9 @@ export type EdgeKind = typeof EdgeKind.Type
 export const RepoRecord = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  rootPath: Schema.String
+  rootPath: Schema.String,
+  indexedAt: Schema.optional(Schema.String),
+  indexDurationMs: Schema.optional(Schema.Number)
 })
 export type RepoRecord = typeof RepoRecord.Type
 
@@ -115,7 +117,8 @@ export type ParsedFile = typeof ParsedFile.Type
 export const FileScanResult = Schema.Struct({
   path: Schema.String,
   absolutePath: Schema.String,
-  hash: Schema.String
+  hash: Schema.String,
+  sizeBytes: Schema.Number
 })
 export type FileScanResult = typeof FileScanResult.Type
 
@@ -155,7 +158,8 @@ export const StatsReport = Schema.Struct({
   repos: Schema.Number,
   files: Schema.Number,
   symbols: Schema.Number,
-  edges: Schema.Number
+  edges: Schema.Number,
+  sourceBytes: Schema.Number
 })
 export type StatsReport = typeof StatsReport.Type
 

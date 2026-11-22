@@ -76,6 +76,7 @@ const statsCommand = Command.make("stats", {}, () =>
     yield* Console.log(`Total Files:  ${stats.files}`)
     yield* Console.log(`Symbols:      ${stats.symbols}`)
     yield* Console.log(`Edges:        ${stats.edges}`)
+    yield* Console.log(`Source:       ${stats.sourceBytes.toLocaleString("en-US")} bytes`)
 
     if (repos.length > 0) {
       yield* Console.log(`\nIndexed Repositories:`)

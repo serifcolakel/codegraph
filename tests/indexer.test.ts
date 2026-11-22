@@ -41,6 +41,12 @@ describe("Indexer service (incremental indexing)", () => {
         expect(report1.filesDeleted).toBe(0)
         expect(report1.symbolsCount).toBeGreaterThanOrEqual(2)
 
+        const repoRecord = yield* store.getRepo(report1.repoId)
+        expect(repoRecord?.indexedAt).toBeTruthy()
+        expect(repoRecord?.indexDurationMs).toBeGreaterThanOrEqual(0)
+        const repoStats = yield* store.getStats(report1.repoId)
+        expect(repoStats.sourceBytes).toBeGreaterThan(0)
+
         // 2. Second indexing without changes -> should skip all files
         const report2 = yield* indexer.indexRepo(tmpDir, { name: "test-repo" })
         expect(report2.filesIndexed).toBe(0)

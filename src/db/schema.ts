@@ -14,7 +14,9 @@ export const initSchema = Effect.gen(function* () {
     CREATE TABLE IF NOT EXISTS repos (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      root_path TEXT NOT NULL UNIQUE
+      root_path TEXT NOT NULL UNIQUE,
+      indexed_at TEXT NOT NULL DEFAULT '',
+      index_duration_ms INTEGER NOT NULL DEFAULT 0
     );
   `.pipe(
     Effect.mapError((e) => new StoreError({ message: "Failed to create repos table", cause: e }))
@@ -28,11 +30,31 @@ export const initSchema = Effect.gen(function* () {
       repo_id TEXT NOT NULL,
       language TEXT NOT NULL DEFAULT '',
       parse_status TEXT NOT NULL DEFAULT '',
+      size_bytes INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY(repo_id) REFERENCES repos(id) ON DELETE CASCADE
     );
   `.pipe(
     Effect.mapError((e) => new StoreError({ message: "Failed to create files table", cause: e }))
   )
+
+  const repoColumns = yield* sql<{ name: string }>`PRAGMA table_info(repos);`.pipe(
+    Effect.mapError((e) => new StoreError({ message: "Failed to inspect repos table", cause: e }))
+  )
+  const repoColumnNames = new Set(repoColumns.map((column) => column.name))
+  if (!repoColumnNames.has("indexed_at")) {
+    yield* sql`ALTER TABLE repos ADD COLUMN indexed_at TEXT NOT NULL DEFAULT '';`.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to add repos.indexed_at column", cause: e })
+      )
+    )
+  }
+  if (!repoColumnNames.has("index_duration_ms")) {
+    yield* sql`ALTER TABLE repos ADD COLUMN index_duration_ms INTEGER NOT NULL DEFAULT 0;`.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to add repos.index_duration_ms column", cause: e })
+      )
+    )
+  }
 
   const fileColumns = yield* sql<{ name: string }>`PRAGMA table_info(files);`.pipe(
     Effect.mapError((e) => new StoreError({ message: "Failed to inspect files table", cause: e }))
@@ -49,6 +71,13 @@ export const initSchema = Effect.gen(function* () {
     yield* sql`ALTER TABLE files ADD COLUMN parse_status TEXT NOT NULL DEFAULT '';`.pipe(
       Effect.mapError(
         (e) => new StoreError({ message: "Failed to add files.parse_status column", cause: e })
+      )
+    )
+  }
+  if (!fileColumnNames.has("size_bytes")) {
+    yield* sql`ALTER TABLE files ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0;`.pipe(
+      Effect.mapError(
+        (e) => new StoreError({ message: "Failed to add files.size_bytes column", cause: e })
       )
     )
   }

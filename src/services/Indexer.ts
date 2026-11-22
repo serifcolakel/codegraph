@@ -106,7 +106,13 @@ export const IndexerLive = Layer.effect(
               )
 
               const parsed = yield* parser.parse(scanned.path, content)
-              yield* store.saveFileIndex(repo.id, scanned.path, scanned.hash, parsed)
+              yield* store.saveFileIndex(
+                repo.id,
+                scanned.path,
+                scanned.hash,
+                scanned.sizeBytes,
+                parsed
+              )
             }),
           { concurrency: config.concurrency }
         ).pipe(Effect.withSpan("Indexer.parseAndStoreFiles"))
@@ -118,6 +124,10 @@ export const IndexerLive = Layer.effect(
           .pipe(Effect.withSpan("IndexStore.resolveEdges"))
 
         const durationMs = Date.now() - startTime
+        const indexedAt = new Date().toISOString()
+        yield* store
+          .markRepoIndexed(repo.id, indexedAt, durationMs)
+          .pipe(Effect.withSpan("IndexStore.markRepoIndexed"))
         const stats = yield* store.getStats(repo.id)
         const coverage = yield* store
           .getCoverage(repo.id)

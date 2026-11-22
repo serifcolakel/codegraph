@@ -41,6 +41,7 @@ export interface IndexStore {
     repoId: string,
     filePath: string,
     hash: string,
+    sizeBytes: number,
     parsed: ParsedFile
   ) => Effect.Effect<void, StoreError>
   readonly deleteFiles: (fileIds: readonly string[]) => Effect.Effect<void, StoreError>
@@ -50,6 +51,11 @@ export interface IndexStore {
     packageMappings?: readonly PackageMapping[]
   ) => Effect.Effect<number, StoreError>
   readonly getStats: (repoId?: string) => Effect.Effect<StatsReport, StoreError>
+  readonly markRepoIndexed: (
+    repoId: string,
+    indexedAt: string,
+    durationMs: number
+  ) => Effect.Effect<void, StoreError>
   readonly getCoverage: (repoId: string) => Effect.Effect<ParseCoverage, StoreError>
   readonly getImportSummary: (
     repoId: string
@@ -74,12 +80,26 @@ export const IndexStoreLive = Layer.effect(
     ): Effect.Effect<RepoRecord, StoreError> =>
       Effect.gen(function* () {
         const repoName = name ?? rootPath.split("/").filter(Boolean).pop() ?? "repo"
-        const existing = yield* sql<RepoRecord>`
-          SELECT id, name, root_path as rootPath FROM repos WHERE root_path = ${rootPath} LIMIT 1;
+        const existing = yield* sql<{
+          id: string
+          name: string
+          rootPath: string
+          indexed_at: string
+          index_duration_ms: number
+        }>`
+          SELECT id, name, root_path as rootPath, indexed_at, index_duration_ms
+          FROM repos WHERE root_path = ${rootPath} LIMIT 1;
         `.pipe(Effect.mapError((e) => new StoreError({ message: "Failed to find repo", cause: e })))
 
         if (existing.length > 0 && existing[0]) {
-          return existing[0]
+          const row = existing[0]
+          return {
+            id: row.id,
+            name: row.name,
+            rootPath: row.rootPath,
+            ...(row.indexed_at ? { indexedAt: row.indexed_at } : {}),
+            ...(row.index_duration_ms > 0 ? { indexDurationMs: row.index_duration_ms } : {})
+          }
         }
 
         const id = `repo_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
@@ -94,18 +114,51 @@ export const IndexStoreLive = Layer.effect(
 
     const getRepo = (idOrPath: string): Effect.Effect<RepoRecord | null, StoreError> =>
       Effect.gen(function* () {
-        const rows = yield* sql<RepoRecord>`
-          SELECT id, name, root_path as rootPath FROM repos WHERE id = ${idOrPath} OR root_path = ${idOrPath} LIMIT 1;
+        const rows = yield* sql<{
+          id: string
+          name: string
+          rootPath: string
+          indexed_at: string
+          index_duration_ms: number
+        }>`
+          SELECT id, name, root_path as rootPath, indexed_at, index_duration_ms
+          FROM repos WHERE id = ${idOrPath} OR root_path = ${idOrPath} LIMIT 1;
         `.pipe(
           Effect.mapError((e) => new StoreError({ message: "Failed to query repo", cause: e }))
         )
-        return rows[0] ?? null
+        const row = rows[0]
+        if (!row) return null
+        return {
+          id: row.id,
+          name: row.name,
+          rootPath: row.rootPath,
+          ...(row.indexed_at ? { indexedAt: row.indexed_at } : {}),
+          ...(row.index_duration_ms > 0 ? { indexDurationMs: row.index_duration_ms } : {})
+        }
       })
 
     const listRepos = (): Effect.Effect<readonly RepoRecord[], StoreError> =>
-      sql<RepoRecord>`
-        SELECT id, name, root_path as rootPath FROM repos ORDER BY name ASC;
-      `.pipe(Effect.mapError((e) => new StoreError({ message: "Failed to list repos", cause: e })))
+      sql<{
+        id: string
+        name: string
+        rootPath: string
+        indexed_at: string
+        index_duration_ms: number
+      }>`
+        SELECT id, name, root_path as rootPath, indexed_at, index_duration_ms
+        FROM repos ORDER BY name ASC;
+      `.pipe(
+        Effect.map((rows) =>
+          rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            rootPath: row.rootPath,
+            ...(row.indexed_at ? { indexedAt: row.indexed_at } : {}),
+            ...(row.index_duration_ms > 0 ? { indexDurationMs: row.index_duration_ms } : {})
+          }))
+        ),
+        Effect.mapError((e) => new StoreError({ message: "Failed to list repos", cause: e }))
+      )
 
     const getFiles = (repoId: string): Effect.Effect<Map<string, FileRecord>, StoreError> =>
       Effect.gen(function* () {
@@ -220,6 +273,7 @@ export const IndexStoreLive = Layer.effect(
       repoId: string,
       filePath: string,
       hash: string,
+      sizeBytes: number,
       parsed: ParsedFile
     ): Effect.Effect<void, StoreError> =>
       Effect.gen(function* () {
@@ -235,8 +289,11 @@ export const IndexStoreLive = Layer.effect(
 
               // Insert file
               yield* sql`
-              INSERT INTO files (id, path, hash, repo_id, language, parse_status)
-              VALUES (${fileId}, ${filePath}, ${hash}, ${repoId}, ${language}, ${parseStatus});
+              INSERT INTO files (id, path, hash, repo_id, language, parse_status, size_bytes)
+              VALUES (
+                ${fileId}, ${filePath}, ${hash}, ${repoId}, ${language}, ${parseStatus},
+                ${sizeBytes}
+              );
             `
 
               // Insert symbols
@@ -638,6 +695,20 @@ export const IndexStoreLive = Layer.effect(
         }
       })
 
+    const markRepoIndexed = (
+      repoId: string,
+      indexedAt: string,
+      durationMs: number
+    ): Effect.Effect<void, StoreError> =>
+      sql`
+        UPDATE repos SET indexed_at = ${indexedAt}, index_duration_ms = ${durationMs}
+        WHERE id = ${repoId};
+      `.pipe(
+        Effect.mapError(
+          (e) => new StoreError({ message: "Failed to update repo index metadata", cause: e })
+        )
+      )
+
     const getStats = (repoId?: string): Effect.Effect<StatsReport, StoreError> =>
       Effect.gen(function* () {
         const reposCount = yield* sql<{ count: number }>`SELECT COUNT(*) as count FROM repos;`
@@ -662,11 +733,20 @@ export const IndexStoreLive = Layer.effect(
             `
           : yield* sql<{ count: number }>`SELECT COUNT(*) as count FROM edges;`
 
+        const sourceBytes = repoId
+          ? yield* sql<{ bytes: number }>`
+              SELECT COALESCE(SUM(size_bytes), 0) as bytes FROM files WHERE repo_id = ${repoId};
+            `
+          : yield* sql<{ bytes: number }>`
+              SELECT COALESCE(SUM(size_bytes), 0) as bytes FROM files;
+            `
+
         return {
           repos: reposCount[0]?.count ?? 0,
           files: filesCount[0]?.count ?? 0,
           symbols: symbolsCount[0]?.count ?? 0,
-          edges: edgesCount[0]?.count ?? 0
+          edges: edgesCount[0]?.count ?? 0,
+          sourceBytes: sourceBytes[0]?.bytes ?? 0
         }
       }).pipe(Effect.mapError((e) => new StoreError({ message: "Failed to get stats", cause: e })))
 
@@ -682,7 +762,8 @@ export const IndexStoreLive = Layer.effect(
       resolveEdges,
       getStats,
       getCoverage,
-      getImportSummary
+      getImportSummary,
+      markRepoIndexed
     }
   })
 )

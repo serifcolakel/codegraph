@@ -1782,6 +1782,18 @@
               <span id="viewModeLabel">File graph</span>
             </div>
             <div class="stats" aria-live="polite">
+              <div class="stat" title="Last index time">
+                <span class="stat-value" id="statIndexed">—</span>
+                <span class="stat-label">Indexed</span>
+              </div>
+              <div class="stat" title="Indexed source size">
+                <span class="stat-value" id="statSource">—</span>
+                <span class="stat-label">Source</span>
+              </div>
+              <div class="stat" title="Searchable symbols">
+                <span class="stat-value" id="statSymbols">0</span>
+                <span class="stat-label">Symbols</span>
+              </div>
               <div class="stat">
                 <span class="stat-value" id="statNodes">0</span>
                 <span class="stat-label">Nodes</span>
@@ -2132,6 +2144,64 @@
         document
           .querySelector(".graph-panel")
           .setAttribute("aria-busy", String(show));
+      }
+
+      function formatBytes(bytes) {
+        const value = Number(bytes) || 0;
+        if (value < 1024) return `${value} B`;
+        const units = ["KB", "MB", "GB", "TB"];
+        let scaled = value / 1024;
+        let index = 0;
+        while (scaled >= 1024 && index < units.length - 1) {
+          scaled /= 1024;
+          index += 1;
+        }
+        return `${scaled.toFixed(scaled >= 10 ? 0 : 1)} ${units[index]}`;
+      }
+
+      function formatRelativeTime(iso) {
+        if (!iso) return "—";
+        const timestamp = Date.parse(iso);
+        if (Number.isNaN(timestamp)) return "—";
+        const diffMs = Date.now() - timestamp;
+        if (diffMs < 0) return "just now";
+        const seconds = Math.floor(diffMs / 1000);
+        if (seconds < 60) return `${seconds}s ago`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 30) return `${days}d ago`;
+        return new Date(timestamp).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+      }
+
+      function setRepoMeta(repo) {
+        const indexedAt = repo ? repo.indexedAt : undefined;
+        const sourceBytes = (repo && repo.sourceBytes) || 0;
+        const fileCount = (repo && repo.files) || 0;
+        const symbolCount = (repo && repo.symbols) || 0;
+
+        $("statIndexed").textContent = formatRelativeTime(indexedAt);
+        $("statIndexed").title = indexedAt
+          ? `${new Date(indexedAt).toLocaleString()}${repo.indexDurationMs ? ` · ${repo.indexDurationMs} ms` : ""}`
+          : "Not indexed yet";
+        $("statSource").textContent = formatBytes(sourceBytes);
+        $("statSource").title = `${sourceBytes.toLocaleString("en-US")} bytes across ${fileCount.toLocaleString("en-US")} files`;
+        $("statSymbols").textContent = symbolCount.toLocaleString("en-US");
+        $("statSymbols").title = `${symbolCount.toLocaleString("en-US")} symbols · ${((repo && repo.edges) || 0).toLocaleString("en-US")} edges`;
+      }
+
+      function clearRepoMeta() {
+        $("statIndexed").textContent = "—";
+        $("statIndexed").title = "Not indexed yet";
+        $("statSource").textContent = "—";
+        $("statSource").title = "Indexed source size";
+        $("statSymbols").textContent = "0";
+        $("statSymbols").title = "Searchable symbols";
       }
 
       function setStats(nodes, edges) {
@@ -2717,6 +2787,7 @@
         $("searchInput").value = "";
         setSearchOpen(false);
         setStats(0, 0);
+        clearRepoMeta();
         clearHash();
         updateBackButton();
       }
@@ -2740,7 +2811,9 @@
           const option = document.createElement("option");
           option.value = repo.id;
           option.textContent = repo.name;
-          option.title = repo.rootPath;
+          option.title = repo.indexedAt
+            ? `${repo.rootPath} · indexed ${formatRelativeTime(repo.indexedAt)}`
+            : repo.rootPath;
           select.appendChild(option);
         }
 
@@ -2751,6 +2824,7 @@
         state.repoPath = selected.rootPath;
         select.value = selected.id;
         $("repoPath").textContent = state.repoPath;
+        setRepoMeta(selected);
         await loadFileGraph();
       }
 
@@ -3228,6 +3302,14 @@
             method: "POST",
             body: JSON.stringify({ repoId: repo.id }),
           });
+          try {
+            const repos = await fetchJson("/api/repos");
+            state.repos = Array.isArray(repos) ? repos : [];
+            const updated = state.repos.find((item) => item.id === repo.id);
+            if (updated) setRepoMeta(updated);
+          } catch {
+            // Metadata refresh is best-effort; the index update already succeeded.
+          }
           await refreshCurrentView();
           toast(
             `Index updated: ${report.filesIndexed} indexed, ${report.filesSkipped} skipped`,
@@ -3266,6 +3348,7 @@
         state.repoPath =
           repo?.rootPath ?? (option ? option.title || option.textContent : "");
         $("repoPath").textContent = state.repoPath;
+        if (repo) setRepoMeta(repo);
         state.history = [];
         state.started = false;
         state.hiddenKinds.clear();
