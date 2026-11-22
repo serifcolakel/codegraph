@@ -2432,6 +2432,8 @@
         <button type="button" class="insight-tab" data-insight-tab="complexity" data-testid="insights-tab-complexity" role="tab" aria-selected="false">Complexity</button>
         <button type="button" class="insight-tab" data-insight-tab="dead_code" data-testid="insights-tab-dead-code" role="tab" aria-selected="false">Dead code</button>
         <button type="button" class="insight-tab" data-insight-tab="cycles" data-testid="insights-tab-cycles" role="tab" aria-selected="false">Cycles</button>
+        <button type="button" class="insight-tab" data-insight-tab="communities" data-testid="insights-tab-communities" role="tab" aria-selected="false">Communities</button>
+        <button type="button" class="insight-tab" data-insight-tab="packages" data-testid="insights-tab-packages" role="tab" aria-selected="false">Packages</button>
         <button type="button" class="insight-tab" data-insight-tab="changes" data-testid="insights-tab-changes" role="tab" aria-selected="false">Changes</button>
       </div>
       <div class="modal-body" id="insightsBody" data-testid="insights-body"></div>
@@ -2829,6 +2831,41 @@
       }
 
       function renderAnalyticsInsight(tab, results) {
+        if (tab === "communities") {
+          if (!Array.isArray(results) || results.length === 0) {
+            $("insightsBody").innerHTML = insightEmpty("No communities found.");
+            return;
+          }
+          $("insightsBody").innerHTML = results
+            .map(
+              (group, index) => `
+                <div class="details-section">
+                  <h3>Community ${index + 1} · ${group.label} · ${group.size} files</h3>
+                  <div class="insight-list">${group.members
+                    .map((member) => insightItem(member.name || member.filePath, member.filePath))
+                    .join("")}</div>
+                </div>`,
+            )
+            .join("");
+          return;
+        }
+
+        if (tab === "packages") {
+          if (!Array.isArray(results) || results.length === 0) {
+            $("insightsBody").innerHTML = insightEmpty("No packages found.");
+            return;
+          }
+          $("insightsBody").innerHTML = `<div class="insight-list">${results
+            .map((pkg) =>
+              insightItem(
+                pkg.name,
+                `score=${pkg.score} · in=${pkg.fanIn} out=${pkg.fanOut} · ${pkg.files} files · ${pkg.symbols} symbols`,
+              ),
+            )
+            .join("")}</div>`;
+          return;
+        }
+
         if (tab === "cycles") {
           if (!Array.isArray(results) || results.length === 0) {
             $("insightsBody").innerHTML = insightEmpty("No cycles found.");
@@ -2977,7 +3014,8 @@
             renderArchitectureInsight(data);
             return;
           }
-          const level = tab === "cycles" ? "&level=symbol" : "";
+          const level =
+            tab === "cycles" ? "&level=symbol" : tab === "communities" ? "&level=file" : "";
           const data = await fetchJson(
             `/api/analytics?repo=${encodeURIComponent(state.repoId)}&analysis=${encodeURIComponent(tab)}&limit=20${level}`,
           );

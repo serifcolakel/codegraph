@@ -23,6 +23,66 @@ const makeTestLive = () => {
 }
 
 describe("Analytics", () => {
+  it.effect("groups communities and ranks packages across directories", () =>
+    Effect.gen(function* () {
+      const indexer = yield* Indexer
+      const analytics = yield* Analytics
+      const fs = yield* FileSystem.FileSystem
+      const path = yield* Path.Path
+
+      const tmpDir = path.resolve(`./.test-tmp-community-${Date.now()}`)
+      yield* fs.makeDirectory(path.join(tmpDir, "lib"), { recursive: true })
+      yield* fs.makeDirectory(path.join(tmpDir, "app"), { recursive: true })
+
+      try {
+        yield* fs.writeFileString(
+          path.join(tmpDir, "lib/a.ts"),
+          `import { fb } from "../app/b";
+export function fa(): number { return fb() }
+`
+        )
+        yield* fs.writeFileString(
+          path.join(tmpDir, "app/b.ts"),
+          "export function fb(): number { return 1 }"
+        )
+        yield* fs.writeFileString(
+          path.join(tmpDir, "app/c.ts"),
+          `import { fa } from "../lib/a";
+export function fc(): number { return fa() }
+`
+        )
+
+        const report = yield* indexer.indexRepo(tmpDir, { name: "communities" })
+
+        const packages = yield* analytics.packageRankings(report.repoId)
+        const byName = new Map(packages.map((pkg) => [pkg.name, pkg]))
+        expect(byName.get("lib")?.fanOut).toBeGreaterThanOrEqual(1)
+        expect(byName.get("app")?.fanIn).toBeGreaterThanOrEqual(1)
+
+        const packageCycles = yield* analytics.cycles(report.repoId, { level: "package" })
+        expect(packageCycles.length).toBeGreaterThan(0)
+        const packageNames = packageCycles.flatMap((group) =>
+          group.members.map((member) => member.name)
+        )
+        expect(packageNames).toEqual(expect.arrayContaining(["app", "lib"]))
+
+        const fileCommunities = yield* analytics.communities(report.repoId, { level: "file" })
+        const fileGroup = fileCommunities.find((group) => group.size >= 3)
+        expect(fileGroup).toBeDefined()
+        const files = fileGroup?.members.map((member) => member.filePath) ?? []
+        expect(files).toEqual(expect.arrayContaining(["lib/a.ts", "app/b.ts", "app/c.ts"]))
+
+        const symbolCommunities = yield* analytics.communities(report.repoId)
+        const symbolNames = symbolCommunities.flatMap((group) =>
+          group.members.map((member) => member.name)
+        )
+        expect(symbolNames).toEqual(expect.arrayContaining(["fa", "fb", "fc"]))
+      } finally {
+        yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.ignore)
+      }
+    }).pipe(Effect.provide(makeTestLive()))
+  )
+
   it.effect("ranks symbols, finds hotspots, dead code and cycles", () =>
     Effect.gen(function* () {
       const indexer = yield* Indexer

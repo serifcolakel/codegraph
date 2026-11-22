@@ -231,6 +231,19 @@ function unusedHelper(): number {
         })
         expect(hotspots.content[0]?.text).toContain("hotspot")
 
+        const packages = yield* callTool("analyze_graph", {
+          analysis: "packages",
+          repoId: report.repoId
+        })
+        expect(packages.content[0]?.text).toContain("package(s)")
+
+        const communities = yield* callTool("analyze_graph", {
+          analysis: "communities",
+          level: "file",
+          repoId: report.repoId
+        })
+        expect(communities.content[0]?.text).toContain("analysis=communities")
+
         // 13. Test query_graph
         const queryGraphResult = yield* callTool("query_graph", {
           query: `MATCH (s:Symbol) WHERE s.name CONTAINS "Data" RETURN s.name AS name, s.filePath AS file ORDER BY s.name LIMIT 5`,

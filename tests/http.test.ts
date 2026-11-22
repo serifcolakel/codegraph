@@ -78,6 +78,46 @@ describe("HTTP API & visualization", () => {
             expect(Array.isArray(architectureRes.packages)).toBe(true)
             expect(Array.isArray(architectureRes.hotspots)).toBe(true)
 
+            // 6. GET /api/analytics exposes complexity, cycles and packages
+            const complexityRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/analytics?repo=${encodeURIComponent(report.repoId)}&analysis=complexity&limit=5`
+              ).then((r) => r.json())
+            )
+            expect(complexityRes.analysis).toBe("complexity")
+            expect(complexityRes.results.length).toBeGreaterThan(0)
+
+            const cyclesRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/analytics?repo=${encodeURIComponent(report.repoId)}&analysis=cycles&level=file`
+              ).then((r) => r.json())
+            )
+            expect(cyclesRes.level).toBe("file")
+            expect(Array.isArray(cyclesRes.results)).toBe(true)
+
+            const packagesRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/analytics?repo=${encodeURIComponent(report.repoId)}&analysis=packages`
+              ).then((r) => r.json())
+            )
+            expect(Array.isArray(packagesRes.results)).toBe(true)
+
+            const missingAnalytics = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/analytics?analysis=hotspots`).then(
+                (r) => r.status
+              )
+            )
+            expect(missingAnalytics).toBe(400)
+
+            // 7. GET /api/changes reports a git error outside a repository root
+            const changesRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/changes?repo=${encodeURIComponent(report.repoId)}`
+              ).then(async (r) => ({ status: r.status, body: await r.json() }))
+            )
+            expect(changesRes.status).toBe(500)
+            expect(changesRes.body.error).toContain("git")
+
             // 8. Test GET /api/graph?repo=&level=file
             const graphRes = yield* Effect.tryPromise(() =>
               fetch(

@@ -123,10 +123,12 @@ export const AnalyzeGraphInput = Schema.Struct({
     "complexity",
     "hotspots",
     "dead_code",
-    "cycles"
+    "cycles",
+    "communities",
+    "packages"
   ),
   repoId: Schema.optional(Schema.String),
-  level: Schema.optional(Schema.Literal("symbol", "file")),
+  level: Schema.optional(Schema.Literal("symbol", "file", "package")),
   limit: Schema.optional(Schema.Number)
 })
 export type AnalyzeGraphInput = typeof AnalyzeGraphInput.Type
@@ -318,7 +320,7 @@ export const createMcpServer = <R>(
         {
           name: "analyze_graph",
           description:
-            "Ranks symbols, finds hotspots, dead-code candidates and call/import cycles.",
+            "Ranks symbols and packages, finds communities, hotspots, dead-code candidates and cycles.",
           inputSchema: {
             type: "object",
             properties: {
@@ -327,7 +329,11 @@ export const createMcpServer = <R>(
                 enum: ["pagerank", "in_degree", "complexity", "hotspots", "dead_code", "cycles"]
               },
               repoId: { type: "string", description: "Optional repo ID" },
-              level: { type: "string", enum: ["symbol", "file"], description: "Cycle level" },
+              level: {
+                type: "string",
+                enum: ["symbol", "file", "package"],
+                description: "Cycle/community level"
+              },
               limit: { type: "number", description: "Max results (default varies, max 200)" }
             },
             required: ["analysis"]
@@ -799,6 +805,40 @@ export const createMcpServer = <R>(
                   })
                   .join("\n\n")
                 return `${header}\n${groups.length} cycle(s)\n\n${body}`
+              }
+
+              if (args.analysis === "communities") {
+                const level = args.level === "file" ? "file" : "symbol"
+                const groups = yield* analytics.communities(repoId, {
+                  level,
+                  ...(args.limit !== undefined ? { limit: args.limit } : {})
+                })
+                if (groups.length === 0) return `${header}\nNo communities found.`
+                const body = groups
+                  .map((group, index) => {
+                    const members = group.members
+                      .map(
+                        (member) =>
+                          `  ${member.name ?? member.id} ${member.filePath}${member.startLine ? `:${member.startLine}` : ""}`
+                      )
+                      .join("\n")
+                    return `community ${index + 1} (label=${group.label}, size=${group.size})\n${members}`
+                  })
+                  .join("\n\n")
+                return `${header}\n${groups.length} community group(s)\n\n${body}`
+              }
+
+              if (args.analysis === "packages") {
+                const results = yield* analytics.packageRankings(repoId, {
+                  ...(args.limit !== undefined ? { limit: args.limit } : {})
+                })
+                const body = results
+                  .map(
+                    (pkg) =>
+                      `${pkg.name} score=${pkg.score} fanIn=${pkg.fanIn} fanOut=${pkg.fanOut} files=${pkg.files} symbols=${pkg.symbols}`
+                  )
+                  .join("\n")
+                return `${header}\n${results.length} package(s)\n\n${body || "none"}`
               }
 
               if (args.analysis === "dead_code") {

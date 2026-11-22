@@ -72,6 +72,12 @@ test.describe("CodeGraph web UI", () => {
     await page.getByTestId("insights-tab-cycles").click()
     await expect(page.getByTestId("insights-body")).toContainText(/No cycles found|Cycle/)
 
+    await page.getByTestId("insights-tab-communities").click()
+    await expect(page.getByTestId("insights-body")).toContainText(/Community|No communities/)
+
+    await page.getByTestId("insights-tab-packages").click()
+    await expect(page.getByTestId("insights-body")).toContainText("src")
+
     await page.getByTestId("insights-tab-changes").click()
     await expect(page.getByTestId("insights-body")).toContainText("Base ref")
 

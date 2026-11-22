@@ -3,7 +3,8 @@ import { Context, Effect, Layer } from "effect"
 import { StoreError } from "../domain/errors.js"
 
 export type RankingAlgorithm = "pagerank" | "in_degree" | "complexity"
-export type CycleLevel = "symbol" | "file"
+export type CycleLevel = "symbol" | "file" | "package"
+export type CommunityLevel = "symbol" | "file"
 
 export interface RankedSymbol {
   readonly id: string
@@ -39,6 +40,29 @@ export interface CycleMember {
   readonly startLine?: number
 }
 
+export interface CommunityMember {
+  readonly id: string
+  readonly name?: string
+  readonly filePath: string
+  readonly startLine?: number
+}
+
+export interface CommunityGroup {
+  readonly level: CommunityLevel
+  readonly label: string
+  readonly size: number
+  readonly members: readonly CommunityMember[]
+}
+
+export interface PackageRanking {
+  readonly name: string
+  readonly files: number
+  readonly symbols: number
+  readonly fanIn: number
+  readonly fanOut: number
+  readonly score: number
+}
+
 export interface CycleGroup {
   readonly level: CycleLevel
   readonly size: number
@@ -62,6 +86,14 @@ export interface Analytics {
     repoId: string,
     options?: { readonly level?: CycleLevel; readonly limit?: number }
   ) => Effect.Effect<readonly CycleGroup[], StoreError>
+  readonly communities: (
+    repoId: string,
+    options?: { readonly level?: CommunityLevel; readonly limit?: number }
+  ) => Effect.Effect<readonly CommunityGroup[], StoreError>
+  readonly packageRankings: (
+    repoId: string,
+    options?: { readonly limit?: number }
+  ) => Effect.Effect<readonly PackageRanking[], StoreError>
 }
 
 export const Analytics = Context.GenericTag<Analytics>("@codegraph/Analytics")
@@ -170,6 +202,61 @@ const adjacencyOf = (edges: readonly EdgeRow[]): Map<string, string[]> => {
   return adjacency
 }
 
+const undirectedAdjacencyOf = (edges: readonly EdgeRow[]): Map<string, string[]> => {
+  const adjacency = new Map<string, string[]>()
+  const add = (from: string, to: string) => {
+    const list = adjacency.get(from) ?? []
+    list.push(to)
+    adjacency.set(from, list)
+  }
+  for (const edge of edges) {
+    add(edge.src, edge.dst)
+    add(edge.dst, edge.src)
+  }
+  return adjacency
+}
+
+const packageOfPath = (filePath: string): string => {
+  const slash = filePath.indexOf("/")
+  return slash === -1 ? "." : filePath.slice(0, slash)
+}
+
+// Deterministic label propagation over an undirected graph.
+const labelPropagation = (
+  nodes: readonly string[],
+  adjacency: ReadonlyMap<string, readonly string[]>
+): ReadonlyMap<string, string> => {
+  const labels = new Map(nodes.map((node) => [node, node]))
+  const ordered = [...nodes].sort()
+
+  for (let iteration = 0; iteration < 30; iteration++) {
+    let changed = false
+    for (const node of ordered) {
+      const counts = new Map<string, number>()
+      for (const neighbor of adjacency.get(node) ?? []) {
+        const label = labels.get(neighbor)
+        if (label === undefined) continue
+        counts.set(label, (counts.get(label) ?? 0) + 1)
+      }
+      let best: string | undefined
+      let bestCount = -1
+      for (const [label, count] of counts) {
+        if (count > bestCount || (count === bestCount && best !== undefined && label < best)) {
+          best = label
+          bestCount = count
+        }
+      }
+      if (best !== undefined && best !== labels.get(node)) {
+        labels.set(node, best)
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+
+  return labels
+}
+
 export const AnalyticsLive = Layer.effect(
   Analytics,
   Effect.gen(function* () {
@@ -205,6 +292,53 @@ export const AnalyticsLive = Layer.effect(
       `.pipe(
         Effect.mapError((e) => new StoreError({ message: "Analytics edge query failed", cause: e }))
       )
+
+    const loadFileGraph = (
+      repoId: string
+    ): Effect.Effect<
+      {
+        readonly fileRows: readonly { readonly id: string; readonly path: string }[]
+        readonly edges: readonly EdgeRow[]
+      },
+      StoreError
+    > =>
+      Effect.gen(function* () {
+        const fileRows = yield* sql<{ id: string; path: string }>`
+          SELECT id, path FROM files WHERE repo_id = ${repoId};
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Analytics file query failed", cause: e })
+          )
+        )
+
+        const importEdges = yield* sql<EdgeRow>`
+          SELECT src_file_id as src, dst_file_id as dst
+          FROM file_edges
+          WHERE repo_id = ${repoId} AND kind = 'imports' AND dst_file_id IS NOT NULL;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Analytics import query failed", cause: e })
+          )
+        )
+
+        const crossFileCalls = yield* sql<EdgeRow>`
+          SELECT DISTINCT f1.id as src, f2.id as dst
+          FROM edges e
+          JOIN symbols s1 ON e.src_symbol_id = s1.id
+          JOIN files f1 ON s1.file_id = f1.id
+          JOIN symbols s2 ON e.dst_symbol_id = s2.id
+          JOIN files f2 ON s2.file_id = f2.id
+          WHERE f1.repo_id = ${repoId}
+            AND f1.id <> f2.id
+            AND e.kind IN ${sql.in(CALL_KINDS)};
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Analytics cross-file call query failed", cause: e })
+          )
+        )
+
+        return { fileRows, edges: [...importEdges, ...crossFileCalls] }
+      })
 
     const rank = (
       repoId: string,
@@ -405,46 +539,44 @@ export const AnalyticsLive = Layer.effect(
             .slice(0, limit)
         }
 
-        const fileRows = yield* sql<{ id: string; path: string }>`
-          SELECT id, path FROM files WHERE repo_id = ${repoId};
-        `.pipe(
-          Effect.mapError(
-            (e) => new StoreError({ message: "Analytics file query failed", cause: e })
+        if (level === "package") {
+          const symbols = yield* loadSymbols(repoId)
+          const calls = yield* loadCallEdges(repoId)
+          const { fileRows, edges: fileEdges } = yield* loadFileGraph(repoId)
+          const filePackage = new Map(fileRows.map((row) => [row.id, packageOfPath(row.path)]))
+          const symbolPackage = new Map(
+            symbols.map((symbol) => [symbol.id, packageOfPath(symbol.filePath)])
           )
-        )
 
-        const importEdges = yield* sql<EdgeRow>`
-          SELECT src_file_id as src, dst_file_id as dst
-          FROM file_edges
-          WHERE repo_id = ${repoId} AND kind = 'imports' AND dst_file_id IS NOT NULL;
-        `.pipe(
-          Effect.mapError(
-            (e) => new StoreError({ message: "Analytics import query failed", cause: e })
-          )
-        )
+          const packageEdges: EdgeRow[] = []
+          for (const edge of calls) {
+            const from = symbolPackage.get(edge.src)
+            const to = symbolPackage.get(edge.dst)
+            if (from && to && from !== to) packageEdges.push({ src: from, dst: to })
+          }
+          for (const edge of fileEdges) {
+            const from = filePackage.get(edge.src)
+            const to = filePackage.get(edge.dst)
+            if (from && to && from !== to) packageEdges.push({ src: from, dst: to })
+          }
 
-        const crossFileCalls = yield* sql<EdgeRow>`
-          SELECT DISTINCT f1.id as src, f2.id as dst
-          FROM edges e
-          JOIN symbols s1 ON e.src_symbol_id = s1.id
-          JOIN files f1 ON s1.file_id = f1.id
-          JOIN symbols s2 ON e.dst_symbol_id = s2.id
-          JOIN files f2 ON s2.file_id = f2.id
-          WHERE f1.repo_id = ${repoId}
-            AND f1.id <> f2.id
-            AND e.kind IN ${sql.in(CALL_KINDS)};
-        `.pipe(
-          Effect.mapError(
-            (e) => new StoreError({ message: "Analytics cross-file call query failed", cause: e })
-          )
-        )
+          const packages = Array.from(new Set(fileRows.map((row) => packageOfPath(row.path))))
+          return stronglyConnected(packages, adjacencyOf(packageEdges))
+            .filter((component) => component.length > 1)
+            .map((component) => ({
+              level,
+              size: component.length,
+              members: component.map((name) => ({ id: name, name, filePath: name }))
+            }))
+            .sort((a, b) => b.size - a.size)
+            .slice(0, limit)
+        }
 
+        const { fileRows, edges: fileEdges } = yield* loadFileGraph(repoId)
         const byId = new Map(fileRows.map((row) => [row.id, row.path]))
-        const adjacency = adjacencyOf([...importEdges, ...crossFileCalls])
+        const adjacency = adjacencyOf(fileEdges)
         const selfLoops = new Set(
-          [...importEdges, ...crossFileCalls]
-            .filter((edge) => edge.src === edge.dst)
-            .map((edge) => edge.src)
+          fileEdges.filter((edge) => edge.src === edge.dst).map((edge) => edge.src)
         )
 
         return stronglyConnected(
@@ -466,6 +598,143 @@ export const AnalyticsLive = Layer.effect(
           .slice(0, limit)
       })
 
-    return { rank, hotspots, deadCode, cycles }
+    const communities = (
+      repoId: string,
+      options: { readonly level?: CommunityLevel; readonly limit?: number } = {}
+    ): Effect.Effect<readonly CommunityGroup[], StoreError> =>
+      Effect.gen(function* () {
+        const level = options.level ?? "symbol"
+        const limit = clampLimit(options.limit, 20)
+
+        if (level === "symbol") {
+          const symbols = yield* loadSymbols(repoId)
+          const edges = yield* loadCallEdges(repoId)
+          const byId = new Map(symbols.map((symbol) => [symbol.id, symbol]))
+          const labels = labelPropagation(
+            symbols.map((symbol) => symbol.id),
+            undirectedAdjacencyOf(edges)
+          )
+          const groups = new Map<string, string[]>()
+          for (const [node, label] of labels) {
+            const list = groups.get(label) ?? []
+            list.push(node)
+            groups.set(label, list)
+          }
+
+          return Array.from(groups.values())
+            .filter((members) => members.length > 1)
+            .map((members) => {
+              const symbolMembers = members.flatMap((id) => {
+                const symbol = byId.get(id)
+                return symbol
+                  ? [
+                      {
+                        id,
+                        name: symbol.name,
+                        filePath: symbol.filePath,
+                        startLine: symbol.startLine
+                      }
+                    ]
+                  : []
+              })
+              const counts = new Map<string, number>()
+              for (const member of symbolMembers) {
+                const pkg = packageOfPath(member.filePath)
+                counts.set(pkg, (counts.get(pkg) ?? 0) + 1)
+              }
+              const label =
+                Array.from(counts.entries()).sort(
+                  (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+                )[0]?.[0] ?? "group"
+              return { level, label, size: symbolMembers.length, members: symbolMembers }
+            })
+            .sort((a, b) => b.size - a.size)
+            .slice(0, limit)
+        }
+
+        const { fileRows, edges } = yield* loadFileGraph(repoId)
+        const byId = new Map(fileRows.map((row) => [row.id, row.path]))
+        const labels = labelPropagation(
+          fileRows.map((row) => row.id),
+          undirectedAdjacencyOf(edges)
+        )
+        const groups = new Map<string, string[]>()
+        for (const [node, label] of labels) {
+          const list = groups.get(label) ?? []
+          list.push(node)
+          groups.set(label, list)
+        }
+
+        return Array.from(groups.values())
+          .filter((members) => members.length > 1)
+          .map((members) => {
+            const fileMembers = members.flatMap((id) => {
+              const filePath = byId.get(id)
+              return filePath ? [{ id, filePath }] : []
+            })
+            const counts = new Map<string, number>()
+            for (const member of fileMembers) {
+              const pkg = packageOfPath(member.filePath)
+              counts.set(pkg, (counts.get(pkg) ?? 0) + 1)
+            }
+            const label =
+              Array.from(counts.entries()).sort(
+                (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+              )[0]?.[0] ?? "group"
+            return { level, label, size: fileMembers.length, members: fileMembers }
+          })
+          .sort((a, b) => b.size - a.size)
+          .slice(0, limit)
+      })
+
+    const packageRankings = (
+      repoId: string,
+      options: { readonly limit?: number } = {}
+    ): Effect.Effect<readonly PackageRanking[], StoreError> =>
+      Effect.gen(function* () {
+        const symbols = yield* loadSymbols(repoId)
+        const edges = yield* loadCallEdges(repoId)
+        const limit = clampLimit(options.limit, 20)
+
+        const symbolPackage = new Map(
+          symbols.map((symbol) => [symbol.id, packageOfPath(symbol.filePath)])
+        )
+        const stats = new Map<string, { files: Set<string>; symbols: number }>()
+        for (const symbol of symbols) {
+          const pkg = packageOfPath(symbol.filePath)
+          const entry = stats.get(pkg) ?? { files: new Set<string>(), symbols: 0 }
+          entry.files.add(symbol.filePath)
+          entry.symbols += 1
+          stats.set(pkg, entry)
+        }
+
+        const fanIn = new Map<string, number>()
+        const fanOut = new Map<string, number>()
+        for (const edge of edges) {
+          const from = symbolPackage.get(edge.src)
+          const to = symbolPackage.get(edge.dst)
+          if (!from || !to || from === to) continue
+          fanOut.set(from, (fanOut.get(from) ?? 0) + 1)
+          fanIn.set(to, (fanIn.get(to) ?? 0) + 1)
+        }
+
+        return Array.from(stats.entries())
+          .map(([name, entry]) => {
+            const incoming = fanIn.get(name) ?? 0
+            const outgoing = fanOut.get(name) ?? 0
+            return {
+              name,
+              files: entry.files.size,
+              symbols: entry.symbols,
+              fanIn: incoming,
+              fanOut: outgoing,
+              score: incoming * 2 + outgoing
+            }
+          })
+          .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+          .slice(0, limit)
+      })
+
+    return { rank, hotspots, deadCode, cycles, communities, packageRankings }
   })
 )

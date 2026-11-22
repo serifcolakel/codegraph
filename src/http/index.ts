@@ -90,7 +90,8 @@ export const makeHttpRouter = Effect.gen(function* () {
         const url = new URL(req.url, "http://localhost")
         const repoId = url.searchParams.get("repo")
         const analysis = url.searchParams.get("analysis") ?? "hotspots"
-        const level = url.searchParams.get("level") === "file" ? "file" : "symbol"
+        const rawLevel = url.searchParams.get("level")
+        const level = rawLevel === "file" || rawLevel === "package" ? rawLevel : "symbol"
         const rawLimit = parseInt(url.searchParams.get("limit") ?? "", 10)
         const limit = Number.isFinite(rawLimit) ? rawLimit : undefined
 
@@ -131,10 +132,19 @@ export const makeHttpRouter = Effect.gen(function* () {
                 level,
                 ...(limit !== undefined ? { limit } : {})
               })
+            case "communities":
+              return yield* analytics.communities(repoId, {
+                level: level === "file" ? "file" : "symbol",
+                ...(limit !== undefined ? { limit } : {})
+              })
+            case "packages":
+              return yield* analytics.packageRankings(repoId, {
+                ...(limit !== undefined ? { limit } : {})
+              })
             default:
               return yield* Effect.fail(
                 new Error(
-                  "Unsupported analysis. Use pagerank, in_degree, complexity, hotspots, dead_code or cycles."
+                  "Unsupported analysis. Use pagerank, in_degree, complexity, hotspots, dead_code, cycles, communities or packages."
                 )
               )
           }
