@@ -79,6 +79,8 @@ export class MemoryDataService implements DataService {
         expect(toolNames).toContain("get_graph_schema")
         expect(toolNames).toContain("get_code_snippet")
         expect(toolNames).toContain("search_code")
+        expect(toolNames).toContain("list_projects")
+        expect(toolNames).toContain("search_graph")
 
         const callToolHandler = handlers.get(CallToolRequestSchema.shape.method.value)
         if (!callToolHandler) throw new Error("call tool handler not registered")
@@ -111,12 +113,36 @@ export class MemoryDataService implements DataService {
         expect(statusResult.content[0]?.text).toContain("coverage:")
         expect(statusResult.content[0]?.text).toContain("unresolved edges:")
 
-        // 6. Test get_graph_schema
+        // 6. Test list_projects
+        const projectsResult = yield* callTool("list_projects", {})
+        expect(projectsResult.content[0]?.text).toContain("mcp-test-repo")
+        expect(projectsResult.content[0]?.text).toContain(report.repoId)
+
+        // 7. Test search_graph with regex, kind filter and paging
+        const graphSearch = yield* callTool("search_graph", {
+          namePattern: "Memory.*",
+          regex: true,
+          kind: "class",
+          repoId: report.repoId,
+          limit: 1
+        })
+        expect(graphSearch.content[0]?.text).toContain("MemoryDataService")
+        expect(graphSearch.content[0]?.text).toContain("in-degree:")
+
+        const graphSearchPage = yield* callTool("search_graph", {
+          namePattern: "Data",
+          repoId: report.repoId,
+          limit: 1,
+          offset: 0
+        })
+        expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
+
+        // 8. Test get_graph_schema
         const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
-        // 7. Test get_code_snippet by qualified name
+        // 9. Test get_code_snippet by qualified name
         const snippetResult = yield* callTool("get_code_snippet", {
           qualifiedName: "service.MemoryDataService",
           repoId: report.repoId
@@ -131,14 +157,14 @@ export class MemoryDataService implements DataService {
         })
         expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
 
-        // 8. Test search_code
+        // 10. Test search_code
         const searchCodeResult = yield* callTool("search_code", {
           query: "MemoryDataService",
           repoId: report.repoId
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 9. Test read_file_range
+        // 11. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,

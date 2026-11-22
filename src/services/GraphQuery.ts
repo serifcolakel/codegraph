@@ -13,6 +13,25 @@ import type {
   SymbolWithFile
 } from "../domain/models.js"
 
+export interface SearchGraphOptions {
+  readonly namePattern?: string
+  readonly regex?: boolean
+  readonly kind?: SymbolKind
+  readonly filePattern?: string
+  readonly repoId?: string
+  readonly minDegree?: number
+  readonly maxDegree?: number
+  readonly limit?: number
+  readonly offset?: number
+}
+
+export interface SearchGraphResult {
+  readonly results: readonly SymbolWithFile[]
+  readonly total: number
+  readonly hasMore: boolean
+  readonly truncated: boolean
+}
+
 export interface GraphQuery {
   readonly searchSymbols: (
     query: string,
@@ -26,6 +45,10 @@ export interface GraphQuery {
     qualifiedName: string,
     repoId?: string
   ) => Effect.Effect<SymbolWithFile | null, StoreError>
+
+  readonly searchGraph: (
+    options: SearchGraphOptions
+  ) => Effect.Effect<SearchGraphResult, StoreError>
 
   readonly findReferences: (
     symbolId: string
@@ -250,6 +273,91 @@ export const GraphQueryLive = Layer.effect(
           exported: r.exported === 1,
           inDegree: r.inDegree
         }))
+      })
+
+    const MAX_SEARCH_GRAPH_CANDIDATES = 20000
+
+    const searchGraph = (
+      options: SearchGraphOptions
+    ): Effect.Effect<SearchGraphResult, StoreError> =>
+      Effect.gen(function* () {
+        const rows = yield* sql<{
+          id: string
+          name: string
+          kind: SymbolKind
+          fileId: string
+          filePath: string
+          startLine: number
+          endLine: number
+          signature: string
+          exported: number
+          doc: string
+          inDegree: number
+        }>`
+          SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
+                 s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
+                 (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+          FROM symbols s
+          JOIN files f ON s.file_id = f.id
+          WHERE 1 = 1
+            ${options.repoId ? sql`AND f.repo_id = ${options.repoId}` : sql``}
+            ${options.kind ? sql`AND s.kind = ${options.kind}` : sql``}
+          ORDER BY inDegree DESC, s.name ASC
+          LIMIT ${MAX_SEARCH_GRAPH_CANDIDATES};
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Search graph query failed", cause: e }))
+        )
+
+        let nameMatcher: ((name: string) => boolean) | undefined
+        if (options.namePattern) {
+          if (options.regex) {
+            try {
+              const pattern = new RegExp(options.namePattern, "i")
+              nameMatcher = (name) => pattern.test(name)
+            } catch {
+              nameMatcher = undefined
+            }
+          }
+          if (!nameMatcher) {
+            const needle = options.namePattern.toLowerCase()
+            nameMatcher = (name) => name.toLowerCase().includes(needle)
+          }
+        }
+
+        const fileNeedle = options.filePattern?.toLowerCase()
+        const minDegree = options.minDegree ?? 0
+        const maxDegree = options.maxDegree ?? Number.MAX_SAFE_INTEGER
+
+        const filtered = rows.filter((row) => {
+          if (nameMatcher && !nameMatcher(row.name)) return false
+          if (fileNeedle && !row.filePath.toLowerCase().includes(fileNeedle)) return false
+          if (row.inDegree < minDegree || row.inDegree > maxDegree) return false
+          return true
+        })
+
+        const offset = Math.max(0, options.offset ?? 0)
+        const limit = Math.max(1, Math.min(200, options.limit ?? 20))
+        const total = filtered.length
+        const page = filtered.slice(offset, offset + limit)
+
+        return {
+          results: page.map((row) => ({
+            id: row.id,
+            name: row.name,
+            kind: row.kind,
+            fileId: row.fileId,
+            filePath: row.filePath,
+            startLine: row.startLine,
+            endLine: row.endLine,
+            signature: row.signature,
+            doc: row.doc,
+            exported: row.exported === 1,
+            inDegree: row.inDegree
+          })),
+          total,
+          hasMore: offset + page.length < total,
+          truncated: rows.length === MAX_SEARCH_GRAPH_CANDIDATES
+        }
       })
 
     const getSymbolByQualifiedName = (
@@ -886,6 +994,7 @@ export const GraphQueryLive = Layer.effect(
       searchSymbols,
       getSymbol,
       getSymbolByQualifiedName,
+      searchGraph,
       findReferences,
       outlineFile,
       neighborhood,

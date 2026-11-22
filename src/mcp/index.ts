@@ -70,6 +70,24 @@ export const CodeSnippetInput = Schema.Struct({
 })
 export type CodeSnippetInput = typeof CodeSnippetInput.Type
 
+export const ListProjectsInput = Schema.Struct({})
+export type ListProjectsInput = typeof ListProjectsInput.Type
+
+export const SearchGraphInput = Schema.Struct({
+  namePattern: Schema.optional(Schema.String),
+  regex: Schema.optional(Schema.Boolean),
+  kind: Schema.optional(
+    Schema.Literal("function", "class", "interface", "type", "const", "method", "property", "enum")
+  ),
+  filePattern: Schema.optional(Schema.String),
+  repoId: Schema.optional(Schema.String),
+  minDegree: Schema.optional(Schema.Number),
+  maxDegree: Schema.optional(Schema.Number),
+  limit: Schema.optional(Schema.Number),
+  offset: Schema.optional(Schema.Number)
+})
+export type SearchGraphInput = typeof SearchGraphInput.Type
+
 export const SearchCodeInput = Schema.Struct({
   query: Schema.String,
   repoId: Schema.optional(Schema.String),
@@ -130,6 +148,45 @@ export const createMcpServer = <R>(
               repoId: { type: "string", description: "Optional repo ID" }
             },
             required: ["path"]
+          }
+        },
+        {
+          name: "list_projects",
+          description: "Lists indexed repositories with their IDs, roots and index counts.",
+          inputSchema: { type: "object", properties: {} }
+        },
+        {
+          name: "search_graph",
+          description:
+            "Searches indexed symbols by name pattern, kind, file scope and degree with paging.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              namePattern: {
+                type: "string",
+                description: "Name substring, or a regex when regex=true"
+              },
+              regex: { type: "boolean", description: "Treat namePattern as a regular expression" },
+              kind: {
+                type: "string",
+                enum: [
+                  "function",
+                  "class",
+                  "interface",
+                  "type",
+                  "const",
+                  "method",
+                  "property",
+                  "enum"
+                ]
+              },
+              filePattern: { type: "string", description: "File path substring filter" },
+              repoId: { type: "string", description: "Optional repo ID" },
+              minDegree: { type: "number", description: "Minimum in-degree" },
+              maxDegree: { type: "number", description: "Maximum in-degree" },
+              limit: { type: "number", description: "Page size (default 20, max 200)" },
+              offset: { type: "number", description: "Result offset for paging" }
+            }
           }
         },
         {
@@ -297,6 +354,69 @@ export const createMcpServer = <R>(
               {
                 type: "text",
                 text: lines.length > 0 ? lines.join("\n") : `No symbols found in ${args.path}`
+              }
+            ]
+          }
+        }
+
+        case "list_projects": {
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const store = yield* IndexStore
+              const repos = yield* store.listRepos()
+              if (repos.length === 0) return "No repositories indexed yet."
+              const lines: string[] = []
+              for (const repo of repos) {
+                const stats = yield* store.getStats(repo.id)
+                lines.push(
+                  `${repo.name} — ${repo.id}\n  root: ${repo.rootPath}\n  files=${stats.files} symbols=${stats.symbols} edges=${stats.edges}`
+                )
+              }
+              return lines.join("\n")
+            })
+          )
+          return { content: [{ type: "text", text }] }
+        }
+
+        case "search_graph": {
+          const args = Schema.decodeUnknownSync(SearchGraphInput)(rawArgs ?? {})
+          const result = await runtime.runPromise(
+            Effect.gen(function* () {
+              const query = yield* GraphQuery
+              return yield* query.searchGraph({
+                ...(args.namePattern !== undefined ? { namePattern: args.namePattern } : {}),
+                ...(args.regex !== undefined ? { regex: args.regex } : {}),
+                ...(args.kind !== undefined ? { kind: args.kind } : {}),
+                ...(args.filePattern !== undefined ? { filePattern: args.filePattern } : {}),
+                ...(args.repoId !== undefined ? { repoId: args.repoId } : {}),
+                ...(args.minDegree !== undefined ? { minDegree: args.minDegree } : {}),
+                ...(args.maxDegree !== undefined ? { maxDegree: args.maxDegree } : {}),
+                ...(args.limit !== undefined ? { limit: args.limit } : {}),
+                ...(args.offset !== undefined ? { offset: args.offset } : {})
+              })
+            })
+          )
+
+          const header = [
+            `Showing ${result.results.length} of ${result.total} (offset ${args.offset ?? 0})`,
+            result.hasMore ? "has_more=true" : "has_more=false",
+            result.truncated ? "truncated=true (candidate cap reached)" : undefined
+          ]
+            .filter((line): line is string => Boolean(line))
+            .join(" · ")
+
+          const body = result.results
+            .map(
+              (symbol) =>
+                `${symbol.name} (${symbol.kind}) at ${symbol.filePath}:${symbol.startLine}\n  ID: ${symbol.id}\n  in-degree: ${symbol.inDegree ?? 0}\n  ${symbol.signature}`
+            )
+            .join("\n\n")
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: body ? `${header}\n\n${body}` : `${header}\n\nNo symbols matched.`
               }
             ]
           }
