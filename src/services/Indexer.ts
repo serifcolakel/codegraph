@@ -5,6 +5,7 @@ import { type ParseError, type StoreError, WalkError } from "../domain/errors.js
 import type { FileScanResult, IndexReport } from "../domain/models.js"
 import { FileWalker } from "./FileWalker.js"
 import { IndexStore } from "./IndexStore.js"
+import { collectPackageMappings } from "./manifest.js"
 import { Parser } from "./Parser.js"
 
 export interface IndexerOptions {
@@ -111,8 +112,9 @@ export const IndexerLive = Layer.effect(
         ).pipe(Effect.withSpan("Indexer.parseAndStoreFiles"))
 
         // 6. Cross-file edge resolution
+        const packageMappings = yield* collectPackageMappings(fs, path, resolvedPath)
         const resolvedEdgesCount = yield* store
-          .resolveEdges(repo.id)
+          .resolveEdges(repo.id, packageMappings)
           .pipe(Effect.withSpan("IndexStore.resolveEdges"))
 
         const durationMs = Date.now() - startTime

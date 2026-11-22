@@ -12,6 +12,7 @@ import type {
   StatsReport
 } from "../domain/models.js"
 import { qualifyName, tokenizeIdentifier } from "../domain/naming.js"
+import type { PackageMapping } from "./manifest.js"
 
 const PARSE_STATUSES: ReadonlySet<string> = new Set(["parsed", "partial", "skipped", "unsupported"])
 
@@ -43,7 +44,10 @@ export interface IndexStore {
     parsed: ParsedFile
   ) => Effect.Effect<void, StoreError>
   readonly deleteFiles: (fileIds: readonly string[]) => Effect.Effect<void, StoreError>
-  readonly resolveEdges: (repoId: string) => Effect.Effect<number, StoreError>
+  readonly resolveEdges: (
+    repoId: string,
+    packageMappings?: readonly PackageMapping[]
+  ) => Effect.Effect<number, StoreError>
   readonly getStats: (repoId?: string) => Effect.Effect<StatsReport, StoreError>
   readonly getCoverage: (repoId: string) => Effect.Effect<ParseCoverage, StoreError>
 }
@@ -247,7 +251,10 @@ export const IndexStoreLive = Layer.effect(
           )
       })
 
-    const resolveEdges = (repoId: string): Effect.Effect<number, StoreError> =>
+    const resolveEdges = (
+      repoId: string,
+      packageMappings: readonly PackageMapping[] = []
+    ): Effect.Effect<number, StoreError> =>
       Effect.gen(function* () {
         // Unresolved targets are stored as `symbol:<name>` or `module:<spec>#<name>`.
         const unresolved = yield* sql<{
@@ -320,6 +327,29 @@ export const IndexStoreLive = Layer.effect(
           return stripKnownExtension(segments.join("/"))
         }
 
+        const sortedMappings = [...packageMappings].sort(
+          (a, b) => b.prefix.length - a.prefix.length
+        )
+
+        const resolvePackageModule = (specifier: string): string | undefined => {
+          const mapping = sortedMappings.find(
+            (candidate) =>
+              specifier === candidate.prefix ||
+              specifier.startsWith(`${candidate.prefix}/`) ||
+              specifier.startsWith(`${candidate.prefix}.`)
+          )
+          if (!mapping) return undefined
+
+          const rest = specifier.slice(mapping.prefix.length)
+          const dotted = rest.startsWith(".")
+          const normalizedRest = dotted
+            ? rest.replace(/^\./, "").replace(/\./g, "/")
+            : rest.replace(/^\//, "")
+          return stripKnownExtension(
+            [mapping.directory, normalizedRest].filter((part) => part.length > 0).join("/")
+          )
+        }
+
         const pickTarget = (edge: (typeof unresolved)[number]): string | undefined => {
           let targetName = ""
           let moduleSpecifier: string | undefined
@@ -338,11 +368,17 @@ export const IndexStoreLive = Layer.effect(
           let candidates = symbolsByName.get(targetName) ?? []
 
           if (candidates.length > 1 && moduleSpecifier) {
-            const resolved = resolveRelativeModule(edge.srcFilePath, moduleSpecifier)
+            const resolved = moduleSpecifier.startsWith(".")
+              ? resolveRelativeModule(edge.srcFilePath, moduleSpecifier)
+              : resolvePackageModule(moduleSpecifier)
             if (resolved !== undefined) {
               candidates = candidates.filter((c) => {
                 const withoutExt = stripKnownExtension(c.filePath)
-                return withoutExt === resolved || withoutExt === `${resolved}/index`
+                return (
+                  withoutExt === resolved ||
+                  withoutExt === `${resolved}/index` ||
+                  dirname(c.filePath) === resolved
+                )
               })
             }
           }
