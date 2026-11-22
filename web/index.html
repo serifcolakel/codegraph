@@ -844,11 +844,11 @@
       }
 
       .topbar-main .control {
-        height: 34px;
+        height: 38px;
       }
 
       .topbar-main .search-box {
-        height: 34px;
+        height: 38px;
       }
 
       .graph-badge {
@@ -878,6 +878,7 @@
 
       .stats {
         display: flex;
+        align-items: center;
         gap: 6px;
         flex-wrap: wrap;
         justify-content: flex-end;
@@ -886,15 +887,38 @@
 
       .stat {
         display: flex;
-        flex-direction: column;
-        gap: 2px;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
         min-width: 74px;
-        padding: 7px 11px;
+        padding: 0 10px;
         background: var(--surface);
         border: 1px solid var(--line);
         border-radius: 12px;
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
+      }
+
+      .stat-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--text-faint);
+      }
+
+      .stat-text {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+
+      .control-icon {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--text-faint);
       }
 
       .stat-value {
@@ -1897,6 +1921,9 @@
               </div>
 
               <div class="control">
+                <svg class="control-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
+                </svg>
                 <span class="control-label">Repo</span>
                 <select id="repoSelect" data-testid="repo-select" aria-label="Repository"></select>
               </div>
@@ -1930,6 +1957,11 @@
               </div>
 
               <div class="control slider-group">
+                <svg class="control-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <path d="M4 8h16M4 16h16" />
+                  <circle cx="9" cy="8" r="2" />
+                  <circle cx="15" cy="16" r="2" />
+                </svg>
                 <label for="depthSlider">Depth <span id="depthVal">1</span></label>
                 <input
                   type="range"
@@ -1944,28 +1976,64 @@
 
             <div class="stats" aria-live="polite">
               <div class="stat" title="Last index time">
-                <span class="stat-value" id="statIndexed" data-testid="stat-indexed">—</span>
-                <span class="stat-label">Indexed</span>
+                <svg class="stat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                </svg>
+                <span class="stat-text">
+                  <span class="stat-value" id="statIndexed" data-testid="stat-indexed">—</span>
+                  <span class="stat-label">Indexed</span>
+                </span>
               </div>
               <div class="stat" title="Indexed source size">
-                <span class="stat-value" id="statSource" data-testid="stat-source">—</span>
-                <span class="stat-label">Source</span>
+                <svg class="stat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 7h16v10H4z" />
+                    <path d="M8 14h.01M12 14h.01" />
+                </svg>
+                <span class="stat-text">
+                  <span class="stat-value" id="statSource" data-testid="stat-source">—</span>
+                  <span class="stat-label">Source</span>
+                </span>
               </div>
               <div class="stat" title="Indexed files">
-                <span class="stat-value" id="statFiles" data-testid="stat-files">0</span>
-                <span class="stat-label">Files</span>
+                <svg class="stat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 3h7l5 5v13H7z" />
+                    <path d="M14 3v5h5" />
+                </svg>
+                <span class="stat-text">
+                  <span class="stat-value" id="statFiles" data-testid="stat-files">0</span>
+                  <span class="stat-label">Files</span>
+                </span>
               </div>
               <div class="stat" title="Searchable symbols">
-                <span class="stat-value" id="statSymbols" data-testid="stat-symbols">0</span>
-                <span class="stat-label">Symbols</span>
+                <svg class="stat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 4 7 20M17 4l-2 16M4 9h16M3 15h16" />
+                </svg>
+                <span class="stat-text">
+                  <span class="stat-value" id="statSymbols" data-testid="stat-symbols">0</span>
+                  <span class="stat-label">Symbols</span>
+                </span>
               </div>
-              <div class="stat">
-                <span class="stat-value" id="statNodes" data-testid="stat-nodes">0</span>
-                <span class="stat-label">Nodes</span>
+              <div class="stat" title="Visible nodes">
+                <svg class="stat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="6" cy="7" r="2" />
+                    <circle cx="18" cy="7" r="2" />
+                    <circle cx="12" cy="17" r="2" />
+                    <path d="M8 8l3 7M16 8l-3 7" />
+                </svg>
+                <span class="stat-text">
+                  <span class="stat-value" id="statNodes" data-testid="stat-nodes">0</span>
+                  <span class="stat-label">Nodes</span>
+                </span>
               </div>
-              <div class="stat">
-                <span class="stat-value" id="statEdges" data-testid="stat-edges">0</span>
-                <span class="stat-label">Edges</span>
+              <div class="stat" title="Visible edges">
+                <svg class="stat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 12h12M12 8l4 4-4 4" />
+                </svg>
+                <span class="stat-text">
+                  <span class="stat-value" id="statEdges" data-testid="stat-edges">0</span>
+                  <span class="stat-label">Edges</span>
+                </span>
               </div>
             </div>
           </div>
