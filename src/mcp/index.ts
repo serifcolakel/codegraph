@@ -10,6 +10,7 @@ import {
 import { Effect, type ManagedRuntime, Schema } from "effect"
 import { Analytics } from "../services/Analytics.js"
 import { ChangeImpact } from "../services/ChangeImpact.js"
+import { CrossRepo } from "../services/CrossRepo.js"
 import { Diagnostics, formatStatus } from "../services/Diagnostics.js"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { Indexer } from "../services/Indexer.js"
@@ -133,6 +134,12 @@ export const AnalyzeGraphInput = Schema.Struct({
 })
 export type AnalyzeGraphInput = typeof AnalyzeGraphInput.Type
 
+export const CrossRepoLinksInput = Schema.Struct({
+  repoId: Schema.optional(Schema.String),
+  refresh: Schema.optional(Schema.Boolean)
+})
+export type CrossRepoLinksInput = typeof CrossRepoLinksInput.Type
+
 export const CompareSnapshotsInput = Schema.Struct({
   repoId: Schema.optional(Schema.String),
   from: Schema.optional(Schema.String),
@@ -196,6 +203,7 @@ export const createMcpServer = <R>(
     | IndexJobRunner
     | QueryLanguage
     | Analytics
+    | CrossRepo
     | FileSystem.FileSystem
     | Path.Path
     | R,
@@ -358,6 +366,18 @@ export const createMcpServer = <R>(
               limit: { type: "number", description: "Max results (default varies, max 200)" }
             },
             required: ["analysis"]
+          }
+        },
+        {
+          name: "cross_repo_links",
+          description:
+            "Matches HTTP routes and async channels across indexed repositories; optionally refreshes links.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              repoId: { type: "string", description: "Optional repo scope" },
+              refresh: { type: "boolean", description: "Recompute cross-repo links first" }
+            }
           }
         },
         {
@@ -924,6 +944,26 @@ export const createMcpServer = <R>(
           return { content: [{ type: "text", text }] }
         }
 
+        case "cross_repo_links": {
+          const args = Schema.decodeUnknownSync(CrossRepoLinksInput)(rawArgs ?? {})
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const crossRepo = yield* CrossRepo
+              if (args.refresh) yield* crossRepo.link()
+              const links = yield* crossRepo.list(args.repoId)
+              if (links.length === 0) return "No cross-repo links."
+              const body = links
+                .map(
+                  (link) =>
+                    `${link.kind} ${link.source.name}: ${link.source.repoName} ${link.source.filePath} -> ${link.target.repoName} ${link.target.filePath} (${link.confidence})`
+                )
+                .join("\n")
+              return `${links.length} cross-repo link(s)\n\n${body}`
+            })
+          )
+          return { content: [{ type: "text", text }] }
+        }
+
         case "compare_snapshots": {
           const args = Schema.decodeUnknownSync(CompareSnapshotsInput)(rawArgs ?? {})
           const result = await runtime.runPromise(
@@ -1291,6 +1331,7 @@ export const startMcpServer = <R>(
     | IndexJobRunner
     | QueryLanguage
     | Analytics
+    | CrossRepo
     | FileSystem.FileSystem
     | Path.Path
     | R,

@@ -275,6 +275,37 @@ export const initSchema = Effect.gen(function* () {
     )
   )
 
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS cross_repo_edges (
+      id TEXT PRIMARY KEY,
+      src_symbol_id TEXT NOT NULL,
+      dst_symbol_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create cross_repo_edges table", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_cross_repo_src ON cross_repo_edges(src_symbol_id);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_cross_repo_src", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_cross_repo_dst ON cross_repo_edges(dst_symbol_id);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_cross_repo_dst", cause: e })
+    )
+  )
+
   const ftsTables = yield* sql<{ name: string }>`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_fts';
   `.pipe(

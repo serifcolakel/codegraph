@@ -9,6 +9,7 @@ import { serveHttp } from "../http/index.js"
 import { startMcpServer } from "../mcp/index.js"
 import { type Analytics, AnalyticsLive } from "../services/Analytics.js"
 import { ChangeImpact, ChangeImpactLive } from "../services/ChangeImpact.js"
+import { CrossRepo, CrossRepoLive } from "../services/CrossRepo.js"
 import { Diagnostics, DiagnosticsLive, formatStatus } from "../services/Diagnostics.js"
 import { FileWalkerLive } from "../services/FileWalker.js"
 import { GitChangesLive } from "../services/GitChanges.js"
@@ -139,7 +140,20 @@ const coverageCommand = Command.make(
     })
 )
 
-// 5. Change impact command (git diff -> affected symbols and blast radius)
+// 5. Cross-repository link command
+const linkCommand = Command.make("link", {}, () =>
+  Effect.gen(function* () {
+    const store = yield* IndexStore
+    yield* store.initSchema()
+    const crossRepo = yield* CrossRepo
+    const result = yield* crossRepo.link()
+    yield* Console.log(
+      `Cross-repo links: ${result.total} (http=${result.http}, async=${result.async})`
+    )
+  })
+)
+
+// 6. Change impact command (git diff -> affected symbols and blast radius)
 const changesCommand = Command.make(
   "changes",
   {
@@ -195,6 +209,7 @@ const mcpCommand = Command.make("mcp", {}, () =>
       | IndexJobRunner
       | QueryLanguage
       | Analytics
+      | CrossRepo
       | FileSystem.FileSystem
       | Path.Path
     >()
@@ -210,6 +225,7 @@ const rootCommand = Command.make("codegraph").pipe(
     statsCommand,
     coverageCommand,
     changesCommand,
+    linkCommand,
     serveCommand,
     mcpCommand
   ])
@@ -229,6 +245,7 @@ export const MainLive = Layer.unwrapEffect(
     const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
     const QueryLanguageServiceLive = QueryLanguageLive.pipe(Layer.provide(SqlLive))
     const AnalyticsServiceLive = AnalyticsLive.pipe(Layer.provide(SqlLive))
+    const CrossRepoServiceLive = CrossRepoLive.pipe(Layer.provide(SqlLive))
     const DiagnosticsServiceLive = DiagnosticsLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
     )
@@ -251,6 +268,7 @@ export const MainLive = Layer.unwrapEffect(
       IndexJobsServiceLive,
       QueryLanguageServiceLive,
       AnalyticsServiceLive,
+      CrossRepoServiceLive,
       IndexJobRunnerLive.pipe(
         Layer.provide(Layer.mergeAll(IndexJobsServiceLive, IndexerServiceLive))
       ),

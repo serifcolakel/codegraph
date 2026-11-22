@@ -11,6 +11,7 @@ import type {
 } from "../domain/models.js"
 import { parseDockerfile } from "../parsers/config.js"
 import { astParserFor } from "../parsers/index.js"
+import { parseOpenApiFile } from "../parsers/openapi.js"
 import { withThrowsEdges } from "../parsers/throws.js"
 import { parseGenericFile } from "./GenericParser.js"
 
@@ -247,6 +248,9 @@ export const ParserLive = Layer.succeed(Parser, {
         const baseName = filePath.split("/").pop() ?? filePath
         if (/^Dockerfile(\.|$)/i.test(baseName)) {
           return parseDockerfile(filePath, content)
+        }
+        if (/^(openapi|swagger)([.-].*)?\.(json|ya?ml)$/i.test(baseName)) {
+          return parseOpenApiFile(filePath, content)
         }
 
         const language = languageForPath(filePath)

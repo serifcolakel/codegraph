@@ -16,12 +16,14 @@ export interface FileWalker {
 
 export const FileWalker = Context.GenericTag<FileWalker>("@codegraph/FileWalker")
 
-const CONFIG_YAML = /^(?:docker-)?compose[^/]*\.ya?ml$|^Chart\.ya?ml$/i
+const CONFIG_YAML =
+  /^(?:docker-)?compose[^/]*\.ya?ml$|^Chart\.ya?ml$|^(?:openapi|swagger)(?:[.-].*)?\.(?:json|ya?ml)$/i
 const CONFIG_PATH = /(^|\/)(k8s|kubernetes|deploy|deployment|helm|manifests)\//i
 
 const isConfigFile = (entry: string, relativePath: string): boolean =>
   /^Dockerfile(?:\.|$)/i.test(entry) ||
-  (/\.(?:ya?ml)$/i.test(entry) && (CONFIG_YAML.test(entry) || CONFIG_PATH.test(relativePath)))
+  CONFIG_YAML.test(entry) ||
+  (/\.(?:ya?ml)$/i.test(entry) && CONFIG_PATH.test(relativePath))
 
 const DEFAULT_IGNORED_DIRS = new Set([
   "node_modules",
@@ -103,31 +105,66 @@ export const FileWalkerLive = Layer.effect(
           }
         }
 
-        // Try reading root .gitignore
-        const gitignorePath = path.join(resolvedRoot, ".gitignore")
-        const hasGitignore = yield* fs
-          .exists(gitignorePath)
-          .pipe(
-            Effect.mapError(
-              (e) => new WalkError({ message: `Error checking .gitignore`, cause: e })
-            )
-          )
-
-        if (hasGitignore) {
-          const content = yield* fs
-            .readFileString(gitignorePath)
-            .pipe(
-              Effect.mapError(
-                (e) => new WalkError({ message: `Failed to read .gitignore`, cause: e })
-              )
-            )
-          ig.add(content)
-        }
-
         const results: FileScanResult[] = []
+        const loadedGitignores = new Set<string>()
 
-        const traverse = (currentDir: string): Effect.Effect<void, WalkError> =>
+        // Reads a .gitignore in its own directory and rewrites patterns so they
+        // stay relative to that directory (git semantics) before feeding `ignore`.
+        const addGitignore = (
+          directory: string,
+          relative: string
+        ): Effect.Effect<void, WalkError> =>
           Effect.gen(function* () {
+            if (loadedGitignores.has(directory)) return
+            loadedGitignores.add(directory)
+            const gitignorePath = path.join(directory, ".gitignore")
+            const hasGitignore = yield* fs
+              .exists(gitignorePath)
+              .pipe(
+                Effect.mapError(
+                  (e) => new WalkError({ message: "Error checking .gitignore", cause: e })
+                )
+              )
+            if (!hasGitignore) return
+
+            const content = yield* fs
+              .readFileString(gitignorePath)
+              .pipe(
+                Effect.mapError(
+                  (e) => new WalkError({ message: "Failed to read .gitignore", cause: e })
+                )
+              )
+            const prefix = relative.split(path.sep).join("/")
+            const patterns: string[] = []
+            for (const rawLine of content.split(/\r?\n/)) {
+              const line = rawLine.trim()
+              if (line.length === 0 || line.startsWith("#")) continue
+              const negated = line.startsWith("!")
+              const body = (negated ? line.slice(1) : line).replace(/^\//, "")
+              if (prefix === "") {
+                patterns.push(line)
+                continue
+              }
+              if (line.startsWith("/") || body.includes("/")) {
+                const prefixed = `${prefix}/${body}`
+                patterns.push(negated ? `!${prefixed}` : prefixed)
+              } else if (negated) {
+                patterns.push(`!${prefix}/**/${body}`)
+                patterns.push(`!${prefix}/${body}`)
+              } else {
+                patterns.push(`${prefix}/**/${body}`)
+                patterns.push(`${prefix}/${body}`)
+              }
+            }
+            ig.add(patterns)
+          })
+
+        const traverse = (
+          currentDir: string,
+          relativeDir: string
+        ): Effect.Effect<void, WalkError> =>
+          Effect.gen(function* () {
+            yield* addGitignore(currentDir, relativeDir)
             const entries = yield* fs
               .readDirectory(currentDir)
               .pipe(
@@ -162,7 +199,7 @@ export const FileWalkerLive = Layer.effect(
                 if (ig.ignores(`${normalizedRelPath}/`)) {
                   continue
                 }
-                yield* traverse(fullPath)
+                yield* traverse(fullPath, path.join(relativeDir, entry))
               } else if (stat.type === "File") {
                 const ext = path.extname(entry).toLowerCase()
                 // Skip unsupported files, type declarations and minified bundles.
@@ -193,7 +230,7 @@ export const FileWalkerLive = Layer.effect(
             }
           })
 
-        yield* traverse(resolvedRoot)
+        yield* traverse(resolvedRoot, "")
         return results
       })
 

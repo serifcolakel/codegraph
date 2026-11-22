@@ -8,6 +8,7 @@ import { describe, expect } from "vitest"
 import { createMcpServer } from "../src/mcp/index.js"
 import { type Analytics, AnalyticsLive } from "../src/services/Analytics.js"
 import { type ChangeImpact, ChangeImpactLive } from "../src/services/ChangeImpact.js"
+import { type CrossRepo, CrossRepoLive } from "../src/services/CrossRepo.js"
 import { type Diagnostics, DiagnosticsLive } from "../src/services/Diagnostics.js"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
 import { GitChangesLive } from "../src/services/GitChanges.js"
@@ -76,6 +77,7 @@ function unusedHelper(): number {
           | IndexJobRunner
           | QueryLanguage
           | Analytics
+          | CrossRepo
           | FileSystem.FileSystem
           | Path.Path
         >()
@@ -251,7 +253,14 @@ function unusedHelper(): number {
         expect(snapshotComparison.content[0]?.text).toContain("snapshots")
         expect(snapshotComparison.content[0]?.text).toContain("files:")
 
-        // 14. Test query_graph
+        // 14. Test cross_repo_links
+        const crossLinks = yield* callTool("cross_repo_links", {
+          repoId: report.repoId,
+          refresh: true
+        })
+        expect(crossLinks.content[0]?.text).toContain("No cross-repo links")
+
+        // 15. Test query_graph
         const queryGraphResult = yield* callTool("query_graph", {
           query: `MATCH (s:Symbol) WHERE s.name CONTAINS "Data" RETURN s.name AS name, s.filePath AS file ORDER BY s.name LIMIT 5`,
           repoId: report.repoId
@@ -259,7 +268,7 @@ function unusedHelper(): number {
         expect(queryGraphResult.content[0]?.text).toContain("columns: name, file")
         expect(queryGraphResult.content[0]?.text).toContain("MemoryDataService")
 
-        // 15. Test search_graph with regex, kind filter and paging
+        // 16. Test search_graph with regex, kind filter and paging
         const graphSearch = yield* callTool("search_graph", {
           namePattern: "Memory.*",
           regex: true,
@@ -278,12 +287,12 @@ function unusedHelper(): number {
         })
         expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
 
-        // 16. Test get_graph_schema
+        // 17. Test get_graph_schema
         const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
-        // 17. Test get_code_snippet by qualified name
+        // 18. Test get_code_snippet by qualified name
         const snippetResult = yield* callTool("get_code_snippet", {
           qualifiedName: "service.MemoryDataService",
           repoId: report.repoId
@@ -298,14 +307,14 @@ function unusedHelper(): number {
         })
         expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
 
-        // 18. Test search_code
+        // 19. Test search_code
         const searchCodeResult = yield* callTool("search_code", {
           query: "MemoryDataService",
           repoId: report.repoId
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 19. Test read_file_range
+        // 20. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
@@ -315,7 +324,7 @@ function unusedHelper(): number {
         expect(readRangeResult.content[0]?.text).toContain("1 |")
         expect(readRangeResult.content[0]?.text).toContain("DataService")
 
-        // 20. Test delete_project
+        // 21. Test delete_project
         const deleteResult = yield* callTool("delete_project", { repoId: report.repoId })
         expect(deleteResult.content[0]?.text).toContain("Deleted index")
         const projectsAfterDelete = yield* callTool("list_projects", {})
@@ -332,6 +341,7 @@ function unusedHelper(): number {
           const JobsLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
           const LanguageLive = QueryLanguageLive.pipe(Layer.provide(SqlLive))
           const AnalyticsServiceLive = AnalyticsLive.pipe(Layer.provide(SqlLive))
+          const CrossRepoServiceLive = CrossRepoLive.pipe(Layer.provide(SqlLive))
           const DiagnosticsServiceLive = DiagnosticsLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
           )
@@ -356,6 +366,7 @@ function unusedHelper(): number {
             RunnerLive,
             LanguageLive,
             AnalyticsServiceLive,
+            CrossRepoServiceLive,
             PlatformLive
           )
         })()

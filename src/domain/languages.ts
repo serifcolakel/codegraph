@@ -14,6 +14,8 @@ export type Language =
   | "scala"
   | "markdown"
   | "yaml"
+  | "graphql"
+  | "text"
 
 const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
   ".ts": "typescript",
@@ -48,7 +50,10 @@ const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
   ".markdown": "markdown",
   ".mdx": "markdown",
   ".yml": "yaml",
-  ".yaml": "yaml"
+  ".yaml": "yaml",
+  ".graphql": "graphql",
+  ".gql": "graphql",
+  ".txt": "text"
 }
 
 const CONFIG_ONLY_EXTENSIONS: ReadonlySet<string> = new Set([".yml", ".yaml"])
@@ -99,5 +104,9 @@ export const languageLabel = (language: Language): string => {
       return "Markdown"
     case "yaml":
       return "YAML"
+    case "graphql":
+      return "GraphQL"
+    case "text":
+      return "Text"
   }
 }

@@ -11,6 +11,11 @@ interface Heading {
 const headingPattern = /^(#{1,6})\s+(.+?)\s*#*\s*$/
 const fencePattern = /^\s*(```+|~~~+)/
 
+const isDecisionPath = (filePath: string): boolean =>
+  /(^|\/)docs\/adr\//i.test(filePath) ||
+  /(^|\/)adr[-/][^/]*\.mdx?$/i.test(filePath) ||
+  /(^|\/)decisions?\//i.test(filePath)
+
 const cleanHeading = (text: string): string =>
   text
     .replace(/`([^`]+)`/g, "$1")
@@ -62,6 +67,7 @@ export const parseMarkdownFile: SourceParser["parse"] = (filePath, content) => {
     headings.push({ level, text, line: index + 1 })
   }
 
+  const decision = isDecisionPath(filePath)
   const symbols: ParsedSymbol[] = []
   const edges: ParsedEdge[] = []
   const edgeKeys = new Set<string>()
@@ -88,7 +94,7 @@ export const parseMarkdownFile: SourceParser["parse"] = (filePath, content) => {
 
     symbols.push({
       name: heading.text,
-      kind: "doc",
+      kind: decision ? "decision" : "doc",
       startLine: heading.line,
       endLine,
       signature: normalizeSignature(`#${"#".repeat(heading.level - 1)} ${heading.text}`),

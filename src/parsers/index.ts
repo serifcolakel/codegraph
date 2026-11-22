@@ -2,11 +2,13 @@ import type { Language } from "../domain/languages.js"
 import { parseYamlConfig } from "./config.js"
 import { parseCsharpFile } from "./csharp.js"
 import { parseGoFile } from "./go.js"
+import { parseGraphqlFile } from "./graphql.js"
 import { parseJavaFile } from "./java.js"
 import { parseKotlinFile } from "./kotlin.js"
 import { parseMarkdownFile } from "./markdown.js"
 import { parsePythonFile } from "./python.js"
 import { parseRustFile } from "./rust.js"
+import { parseTextFile } from "./text.js"
 import type { SourceParser } from "./types.js"
 
 export type { SourceParser } from "./types.js"
@@ -20,7 +22,9 @@ const AST_PARSERS: Partial<Record<Language, SourceParser>> = {
   kotlin: { parse: parseKotlinFile },
   csharp: { parse: parseCsharpFile },
   markdown: { parse: parseMarkdownFile },
-  yaml: { parse: parseYamlConfig }
+  yaml: { parse: parseYamlConfig },
+  graphql: { parse: parseGraphqlFile },
+  text: { parse: parseTextFile }
 }
 
 export const astParserFor = (language: Language): SourceParser | undefined => AST_PARSERS[language]
