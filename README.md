@@ -31,6 +31,8 @@ MCP server.
   (`cross_repo_links` MCP tool and `link` CLI command).
 - Freshness reporting (`freshness` CLI, `/api/freshness`, `index_status` MCP)
   comparing on-disk hashes against the index.
+- Portable repo-scoped graph artifacts: gzip-compressed export/import for team
+  baselines (`artifact export/import`), followed by incremental indexing.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Hybrid search: BM25 + local offline embeddings + graph proximity, with
@@ -85,6 +87,10 @@ npm run codegraph -- index /path/to/repo --force
 
 # Index and watch for changes
 npm run codegraph -- index /path/to/repo --watch
+
+# Share a repo graph baseline, then import and update incrementally
+npm run codegraph -- artifact export <repoId> ./graph.json.gz
+npm run codegraph -- artifact import ./graph.json.gz /path/to/project --force
 
 # Show global or per-repo statistics
 npm run codegraph -- stats

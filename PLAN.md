@@ -44,6 +44,8 @@ Implemented and verified:
   Copilot, opencode and git.
 - Offline hybrid search with `symbol_vectors`, semantic `search_graph`,
   `analyze_graph(duplicates)` and persisted `similar_to` edges.
+- Repo-scoped gzip graph artifacts for team baselines with force-safe import and
+  incremental updates.
 - File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
@@ -164,8 +166,8 @@ Make the MCP server useful for real repository investigations.
 
 - [x] Background watcher with debounced incremental indexing.
 - [x] Project-scoped databases (`CODEGRAPH_DB_PATH`) and explicit repo namespaces in one database.
-- [ ] Shared compressed graph artifact for team baselines.
-- [ ] Artifact import on first index, then incremental local updates.
+- [x] Shared compressed graph artifact for team baselines (gzip via Node stdlib; zstd remains optional).
+- [x] Artifact import on first index, then incremental local updates.
 - [x] Index freshness metadata and explicit stale/partial reporting.
 - [ ] Optional daemon to own long-running watches and async jobs.
 - [x] Configurable neighborhood, search and depth limits.
