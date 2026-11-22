@@ -5,6 +5,10 @@ It indexes a repository into a symbol/reference graph stored in SQLite, serves a
 single-page graph visualization, and exposes the index to AI agents through an
 MCP server.
 
+<img width="2044" height="855" alt="image" src="https://github.com/user-attachments/assets/c88be858-d677-4964-b5c7-586525c44617" />
+
+<img width="2044" height="855" alt="image" src="https://github.com/user-attachments/assets/6e40d259-705d-4c61-aa1a-c521e1fed5be" />
+
 ## Features
 
 - Incremental indexing: files are hashed and only changed files are re-parsed.
