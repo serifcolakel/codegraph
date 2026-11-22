@@ -1,5 +1,6 @@
 import * as SqlClient from "@effect/sql/SqlClient"
 import { Context, Effect, Layer } from "effect"
+import { appConfig } from "../domain/config.js"
 import { NotFoundError, StoreError } from "../domain/errors.js"
 import type {
   EdgeKind,
@@ -131,10 +132,11 @@ export const GraphQueryLive = Layer.effect(
   GraphQuery,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
+    const config = yield* appConfig
 
     const searchSymbols = (
       query: string,
-      limit: number = 20,
+      limit: number = Math.min(20, config.searchLimit),
       repoId?: string
     ): Effect.Effect<readonly SymbolWithFile[], StoreError> =>
       Effect.gen(function* () {
@@ -573,7 +575,7 @@ export const GraphQueryLive = Layer.effect(
         if (!start) return null
 
         const direction = options.direction ?? "both"
-        const depth = Math.max(1, Math.min(6, Math.floor(options.depth ?? 2)))
+        const depth = Math.max(1, Math.min(config.maxDepth, Math.floor(options.depth ?? 2)))
         const mode = options.mode ?? "calls"
         const kinds = EDGE_KINDS_BY_MODE[mode]
         const kindClause = kinds ? sql`AND e.kind IN ${sql.in(kinds)}` : sql``
@@ -992,8 +994,8 @@ export const GraphQueryLive = Layer.effect(
           return yield* Effect.fail(new NotFoundError({ entity: "Symbol", id: symbolId }))
         }
 
-        const MAX_NEIGHBORHOOD_DEPTH = 8
-        const MAX_NEIGHBORHOOD_NODES = 500
+        const MAX_NEIGHBORHOOD_DEPTH = config.maxDepth
+        const MAX_NEIGHBORHOOD_NODES = config.neighborhoodLimit
         const safeDepth = Math.max(0, Math.min(MAX_NEIGHBORHOOD_DEPTH, Math.floor(depth)))
 
         // BFS to collect nodes and edges up to depth

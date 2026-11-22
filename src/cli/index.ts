@@ -50,6 +50,7 @@ const indexCommand = Command.make(
 
       if (watch) {
         const fs = yield* FileSystem.FileSystem
+        const config = yield* appConfig
         yield* Console.log(`[Watch mode enabled] Watching for changes...`)
 
         const reindex = indexer.indexRepo(path).pipe(
@@ -62,7 +63,7 @@ const indexCommand = Command.make(
         )
 
         yield* fs.watch(path, { recursive: true }).pipe(
-          Stream.debounce("500 millis"),
+          Stream.debounce(config.watchDebounceMs),
           Stream.runForEach(() => reindex)
         )
       }
