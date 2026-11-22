@@ -34,10 +34,15 @@ Implemented and verified:
   detection and snapshot comparison.
 - Complexity metrics computed for TS/JS and tree-sitter languages and stored on
   symbols.
-- Markdown headings indexed as `doc` symbols with resolved `mentions` edges.
+- Markdown/MDX and `.txt` files indexed as `doc` symbols; Markdown headings
+  produce resolved `mentions` edges.
+- Cross-repository HTTP route and async channel matching into
+  `cross_repo_edges`.
+- File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
-- ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes and
-  deduplicated event `channel` nodes with publishes/subscribes edges.
+- ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
+  deduplicated event `channel` nodes, OpenAPI route nodes and GraphQL schema
+  symbols.
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
 - Graph queries: search, symbol details, references, outline, neighborhood, repo map, file graph.
 - HTTP API with indexing actions:
@@ -54,12 +59,13 @@ Implemented and verified:
     and git change impact; rows jump to the graph.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 21 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
-  `query_graph`, `analyze_graph`, `compare_snapshots`, `get_architecture`, `trace_path`,
-  `detect_changes`, `index_repository`, `index_job_status`, `delete_project`,
-  `list_projects`, `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
-  `get_code_snippet`, `search_code`, `read_file_range`.
-- CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
+- MCP server with 22 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
+  `query_graph`, `analyze_graph`, `compare_snapshots`, `cross_repo_links`,
+  `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
+  `index_job_status`, `delete_project`, `list_projects`, `find_references`,
+  `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
+  `read_file_range`.
+- CLI: `index [--watch] [--force]`, `serve`, `stats`, `coverage`, `changes`, `link`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
 ## Architecture Rules
@@ -144,9 +150,9 @@ Make the MCP server useful for real repository investigations.
 - [x] Channel edges for event emitters and pub/sub where statically resolvable.
 - [x] Documentation sections: Markdown headings as graph nodes with `MENTIONS` links to code.
 - [x] Architecture decision records stored with the index.
-- [ ] OpenAPI and GraphQL schema entities where they add navigable value.
+- [x] OpenAPI and GraphQL schema entities where they add navigable value.
 - [x] Container and deployment configuration nodes (Docker, Compose, Kubernetes, Helm).
-- [ ] Cross-repository edges for HTTP, RPC and async channels.
+- [x] Cross-repository edges for HTTP routes and async channels (RPC remains).
 
 ### Phase 6 — Operations and distribution (P2)
 

@@ -16,7 +16,8 @@ MCP server.
   plus import, call, call_reference, usage, reference, extends, implements,
   contains, throws and raises edges. File-level imports are stored separately so
   type-only imports stay visible.
-- Markdown documentation: headings become `doc` symbols and inline code spans
+- Markdown/MDX documentation (`docs/*.md`, `.mdx`) and plain-text notes (`.txt`)
+  become `doc` symbols; Markdown headings are sections and inline code spans
   resolve to `mentions` edges pointing at code.
 - Route nodes for Next.js app/pages routes, Express-style declarations and
   FastAPI decorators, linked to their handler symbols.
@@ -24,6 +25,10 @@ MCP server.
   Kubernetes resources and Helm charts indexed as `config` nodes.
 - Event channels from `emit`/`publish`/`on`/`subscribe` calls become deduplicated
   `channel` nodes with `publishes` and `subscribes` edges.
+- OpenAPI JSON/YAML operations become route nodes; GraphQL types, interfaces,
+  enums and fields become typed symbols.
+- Cross-repository matching of HTTP routes and async channels
+  (`cross_repo_links` MCP tool and `link` CLI command).
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Graph analytics: PageRank/in-degree/complexity ranking, package rankings,
@@ -143,7 +148,7 @@ The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
 `index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
 `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `query_graph`,
-`analyze_graph`, `compare_snapshots`, and `read_file_range`.
+`analyze_graph`, `compare_snapshots`, `cross_repo_links`, and `read_file_range`.
 
 `query_graph` accepts a safe, read-only Cypher subset:
 
