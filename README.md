@@ -33,6 +33,9 @@ MCP server.
   comparing on-disk hashes against the index.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
+- Hybrid search: BM25 + local offline embeddings + graph proximity, with
+  dependency-free feature-hashing vectors stored in SQLite beside symbols.
+- Near-duplicate detection persists `similar_to` edges between similar symbols.
 - Graph analytics: PageRank/in-degree/complexity ranking, package rankings,
   hotspots, communities, dead-code candidates, symbol/file/package cycle
   detection (`analyze_graph`) and index snapshot comparison.
@@ -156,7 +159,8 @@ The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
 `index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
 `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `query_graph`,
-`analyze_graph`, `compare_snapshots`, `cross_repo_links`, and `read_file_range`.
+`analyze_graph` (including `semantic` search and `duplicates`), `compare_snapshots`,
+`cross_repo_links`, and `read_file_range`.
 
 `query_graph` accepts a safe, read-only Cypher subset:
 

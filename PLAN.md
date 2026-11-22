@@ -42,6 +42,8 @@ Implemented and verified:
 - Debounced watch mode and configurable search/neighborhood/depth limits.
 - Agent integration: repo skill and auto-index hooks for Claude Code, Codex,
   Copilot, opencode and git.
+- Offline hybrid search with `symbol_vectors`, semantic `search_graph`,
+  `analyze_graph(duplicates)` and persisted `similar_to` edges.
 - File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
@@ -141,12 +143,12 @@ Make the MCP server useful for real repository investigations.
 
 ### Phase 4 — Search and semantics (P1)
 
-- [ ] Hybrid search: structural filters + BM25 + semantic similarity.
-- [ ] Local embedding pipeline (no API keys, runs offline).
-- [ ] Vector storage beside SQLite; incremental embedding for changed symbols only.
-- [ ] Combine code, signature, docs and graph proximity in ranking.
-- [ ] Near-duplicate detection for functions/classes and `SIMILAR_TO` edges.
-- [ ] Expose semantic search through the existing `search_graph` surface, not a separate tool.
+- [x] Hybrid search: structural filters + BM25 + semantic similarity.
+- [x] Local embedding pipeline (no API keys, runs offline) using deterministic feature hashing (model swap remains optional).
+- [x] Vector storage beside SQLite (`symbol_vectors`); incremental embedding for new/changed symbols and backfill on re-index.
+- [x] Combine code, signature, docs and graph proximity in ranking.
+- [x] Near-duplicate detection for functions/classes and `similar_to` edges.
+- [x] Expose semantic search through the existing `search_graph` surface, not a separate tool.
 
 ### Phase 5 — System context (P2)
 
