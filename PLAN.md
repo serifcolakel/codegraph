@@ -34,6 +34,7 @@ Implemented and verified:
   detection and snapshot comparison.
 - Complexity metrics computed for TS/JS and tree-sitter languages and stored on
   symbols.
+- Markdown headings indexed as `doc` symbols with resolved `mentions` edges.
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
 - Graph queries: search, symbol details, references, outline, neighborhood, repo map, file graph.
 - HTTP API with indexing actions:
@@ -138,7 +139,7 @@ Make the MCP server useful for real repository investigations.
 
 - [ ] Route nodes for framework conventions (file-based routing and explicit route declarations).
 - [ ] Channel edges for event emitters, pub/sub and message queues where statically resolvable.
-- [ ] Documentation sections: Markdown headings as graph nodes with `MENTIONS` links to code.
+- [x] Documentation sections: Markdown headings as graph nodes with `MENTIONS` links to code.
 - [ ] Architecture decision records stored with the index.
 - [ ] OpenAPI and GraphQL schema entities where they add navigable value.
 - [ ] Container and deployment configuration nodes (Docker, Compose, Kubernetes, Helm).
