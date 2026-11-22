@@ -185,56 +185,15 @@
         position: relative;
         z-index: 1;
         display: grid;
-        grid-template-rows: auto auto 1fr;
+        grid-template-rows: auto 1fr;
         height: 100%;
       }
 
-      .repo-info-bar {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 6px 16px;
-        margin: 10px 16px 0;
-        padding: 8px 14px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: var(--surface);
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
-        font-size: 0.75rem;
-        color: var(--text-dim);
-      }
-
-      .repo-info-item {
-        display: inline-flex;
-        align-items: baseline;
-        gap: 6px;
-      }
-
-      .repo-info-key {
-        font-size: 0.58rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--text-faint);
-      }
-
-      .repo-info-value {
-        color: var(--text);
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .repo-info-spacer {
-        flex: 1;
-      }
-
-      .info-btn {
-        height: 28px;
-        padding: 0 12px;
-        border-radius: 999px;
+      .stats .info-btn {
+        align-self: stretch;
+        height: auto;
+        padding: 0 14px;
+        border-radius: 12px;
         border: 1px solid var(--line);
         background: var(--surface-soft);
         color: var(--text);
@@ -247,7 +206,7 @@
           background 0.16s ease;
       }
 
-      .info-btn:hover {
+      .stats .info-btn:hover {
         border-color: var(--line-strong);
         background: var(--surface);
       }
@@ -1895,39 +1854,6 @@
         </div>
       </header>
 
-      <div class="repo-info-bar" data-testid="repo-info-bar">
-        <span class="repo-info-item">
-          <span class="repo-info-key">Indexed</span>
-          <span class="repo-info-value" id="infoIndexed" data-testid="info-indexed">—</span>
-        </span>
-        <span class="repo-info-item">
-          <span class="repo-info-key">Source</span>
-          <span class="repo-info-value" id="infoSource" data-testid="info-source">—</span>
-        </span>
-        <span class="repo-info-item">
-          <span class="repo-info-key">Files</span>
-          <span class="repo-info-value" id="infoFiles" data-testid="info-files">0</span>
-        </span>
-        <span class="repo-info-item">
-          <span class="repo-info-key">Symbols</span>
-          <span class="repo-info-value" id="infoSymbols" data-testid="info-symbols">0</span>
-        </span>
-        <span class="repo-info-item">
-          <span class="repo-info-key">Edges</span>
-          <span class="repo-info-value" id="infoEdges" data-testid="info-edges">0</span>
-        </span>
-        <span class="repo-info-spacer"></span>
-        <button
-          type="button"
-          id="detailsBtn"
-          class="info-btn"
-          data-testid="details-button"
-          title="Show index details"
-        >
-          Details
-        </button>
-      </div>
-
       <main class="workspace">
         <section class="graph-panel" aria-label="Graph">
           <div id="cy" data-testid="graph-canvas"></div>
@@ -1946,6 +1872,10 @@
                 <span class="stat-value" id="statSource" data-testid="stat-source">—</span>
                 <span class="stat-label">Source</span>
               </div>
+              <div class="stat" title="Indexed files">
+                <span class="stat-value" id="statFiles" data-testid="stat-files">0</span>
+                <span class="stat-label">Files</span>
+              </div>
               <div class="stat" title="Searchable symbols">
                 <span class="stat-value" id="statSymbols" data-testid="stat-symbols">0</span>
                 <span class="stat-label">Symbols</span>
@@ -1958,6 +1888,15 @@
                 <span class="stat-value" id="statEdges" data-testid="stat-edges">0</span>
                 <span class="stat-label">Edges</span>
               </div>
+              <button
+                type="button"
+                id="detailsBtn"
+                class="info-btn"
+                data-testid="details-button"
+                title="Show index details"
+              >
+                Details
+              </button>
             </div>
           </div>
 
@@ -2394,13 +2333,8 @@
         $("statSymbols").textContent = symbolCount.toLocaleString("en-US");
         $("statSymbols").title = `${symbolCount.toLocaleString("en-US")} symbols · ${((repo && repo.edges) || 0).toLocaleString("en-US")} edges`;
 
-        $("infoIndexed").textContent = formatRelativeTime(indexedAt);
-        $("infoIndexed").title = $("statIndexed").title;
-        $("infoSource").textContent = formatBytes(sourceBytes);
-        $("infoSource").title = $("statSource").title;
-        $("infoFiles").textContent = fileCount.toLocaleString("en-US");
-        $("infoSymbols").textContent = symbolCount.toLocaleString("en-US");
-        $("infoEdges").textContent = ((repo && repo.edges) || 0).toLocaleString("en-US");
+        $("statFiles").textContent = fileCount.toLocaleString("en-US");
+        $("statFiles").title = `${fileCount.toLocaleString("en-US")} files · ${((repo && repo.edges) || 0).toLocaleString("en-US")} edges`;
       }
 
       function clearRepoMeta() {
@@ -2410,13 +2344,8 @@
         $("statSource").title = "Indexed source size";
         $("statSymbols").textContent = "0";
         $("statSymbols").title = "Searchable symbols";
-        $("infoIndexed").textContent = "—";
-        $("infoIndexed").title = "Not indexed yet";
-        $("infoSource").textContent = "—";
-        $("infoSource").title = "Indexed source size";
-        $("infoFiles").textContent = "0";
-        $("infoSymbols").textContent = "0";
-        $("infoEdges").textContent = "0";
+        $("statFiles").textContent = "0";
+        $("statFiles").title = "Indexed files";
       }
 
       function escapeHtml(value) {

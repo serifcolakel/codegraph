@@ -26,9 +26,9 @@ MCP server.
 - FTS5 symbol search plus a ranked repository map.
 - Static HTML/Cytoscape.js visualization (no frontend build step) with dark and
   light themes, deep links, callers/callees, type filters and view history.
-- Repository metadata bar in the UI: last index time, index duration, source
-  size, file/symbol/edge counts. An **Index details** dialog shows languages,
-  parse coverage, import resolution and recent indexing jobs.
+- Repository metadata stat cards in the UI: last index time, index duration,
+  source size, file/symbol/edge counts. An **Index details** dialog shows
+  languages, parse coverage, import resolution and recent indexing jobs.
 - HTTP JSON API and an MCP stdio server.
 - Optional watch mode that re-indexes on change (debounced).
 

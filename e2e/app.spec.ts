@@ -33,10 +33,11 @@ test.describe("CodeGraph web UI", () => {
     )
     await expect(page.getByTestId("stat-symbols")).toHaveText(repo.symbols.toLocaleString("en-US"))
 
-    await expect(page.getByTestId("info-indexed")).toHaveText(/ago|just now/)
-    await expect(page.getByTestId("info-source")).toHaveText(/\d+(\.\d+)? (B|KB|MB)/)
-    await expect(page.getByTestId("info-files")).toHaveText(repo.files.toLocaleString("en-US"))
-    await expect(page.getByTestId("info-symbols")).toHaveText(repo.symbols.toLocaleString("en-US"))
+    await expect(page.getByTestId("stat-files")).toHaveText(repo.files.toLocaleString("en-US"))
+    await expect(page.getByTestId("stat-files")).toHaveAttribute(
+      "title",
+      `${repo.files.toLocaleString("en-US")} files · ${repo.edges.toLocaleString("en-US")} edges`
+    )
   })
 
   test("shows the index details dialog", async ({ page }) => {
