@@ -47,7 +47,8 @@ Implemented and verified:
 - Repo-scoped gzip graph artifacts for team baselines with force-safe import and
   incremental updates.
 - Optional daemon with HTTP server and debounced repository watches.
-- Repository rename from the Details dialog and localStorage saved views.
+- Repository rename from the Details dialog, localStorage saved views and a
+  clickable graph minimap.
 - File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
@@ -182,7 +183,7 @@ Make the MCP server useful for real repository investigations.
 - [x] Change-impact view driven by git diff (Insights).
 - [x] Project management: add, rename, delete and inspect coverage.
 - [x] Saved views (localStorage).
-- [ ] Graph minimap.
+- [x] Graph minimap with click-to-pan.
 - [x] Keep the frontend static and build-step-free unless explicitly requested.
 
 ## Data Model v2 (proposed)

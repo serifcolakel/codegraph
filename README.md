@@ -36,7 +36,7 @@ MCP server.
 - Optional `daemon` command owning the HTTP server and debounced watches for all
   indexed repositories.
 - Project management in the UI: add, rename (Details dialog), delete and inspect
-  coverage; saved views persisted in localStorage.
+  coverage; saved views persisted in localStorage; clickable graph minimap.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Hybrid search: BM25 + local offline embeddings + graph proximity, with
