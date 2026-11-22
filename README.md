@@ -18,8 +18,9 @@ MCP server.
   type-only imports stay visible.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
-- Graph analytics: PageRank/in-degree/complexity ranking, hotspots, dead-code
-  candidates and symbol/file cycle detection (`analyze_graph` MCP tool).
+- Graph analytics: PageRank/in-degree/complexity ranking, package rankings,
+  hotspots, communities, dead-code candidates and symbol/file/package cycle
+  detection (`analyze_graph` MCP tool).
 - Complexity metrics: cyclomatic, cognitive, loop depth/count, scan/allocation
   inside loops, recursion and parameter count for TS/JS and tree-sitter
   languages.
@@ -35,8 +36,8 @@ MCP server.
 - Repository metadata stat cards in the UI: last index time, index duration,
   source size, file/symbol/edge counts. An **Index details** dialog shows
   languages, parse coverage, import resolution and recent indexing jobs. An
-  **Insights** dialog surfaces architecture, hotspots, complexity, dead code,
-  cycles and change impact, with click-through to the graph.
+  **Insights** dialog surfaces architecture, hotspots, complexity, communities,
+  packages, dead code, cycles and change impact, with click-through to the graph.
 - HTTP JSON API and an MCP stdio server.
 - Optional watch mode that re-indexes on change (debounced).
 
@@ -110,7 +111,7 @@ configured ignore globs.
 | `GET /api/repos`                                | Repos with index time, size and counts      |
 | `GET /api/coverage?repo=`                       | Parse coverage and import diagnostics       |
 | `GET /api/architecture?repo=`                   | Languages, packages, entry points, hotspots |
-| `GET /api/analytics?repo=&analysis=`            | Ranking, hotspots, dead code, cycles        |
+| `GET /api/analytics?repo=&analysis=`            | Ranking, hotspots, communities, dead code   |
 | `GET /api/changes?repo=&base=`                  | Git change impact and blast radius          |
 | `GET /api/graph?repo=&level=file`               | File-level import/call graph                |
 | `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)             |
