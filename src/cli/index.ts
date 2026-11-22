@@ -7,6 +7,7 @@ import { Console, Effect, Layer, ManagedRuntime, Stream } from "effect"
 import { appConfig } from "../domain/config.js"
 import { serveHttp } from "../http/index.js"
 import { startMcpServer } from "../mcp/index.js"
+import { Diagnostics, DiagnosticsLive, formatStatus } from "../services/Diagnostics.js"
 import { FileWalkerLive } from "../services/FileWalker.js"
 import { type GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../services/Indexer.js"
@@ -98,13 +99,46 @@ const serveCommand = Command.make(
     })
 )
 
-// 4. MCP command (Model Context Protocol stdio server)
+// 4. Coverage command (parse coverage and unresolved edge diagnostics)
+const coverageCommand = Command.make(
+  "coverage",
+  {
+    repo: Args.text({ name: "repo" }).pipe(Args.optional)
+  },
+  ({ repo }) =>
+    Effect.gen(function* () {
+      const store = yield* IndexStore
+      yield* store.initSchema()
+      const diagnostics = yield* Diagnostics
+
+      if (repo._tag === "Some") {
+        const status = yield* diagnostics
+          .repoStatus(repo.value)
+          .pipe(Effect.catchAll((error) => Console.error(`${error._tag}: ${error.message}`)))
+        if (status) yield* Console.log(`\n${formatStatus(status)}\n`)
+        return
+      }
+
+      const statuses = yield* diagnostics.listStatuses()
+      if (statuses.length === 0) {
+        yield* Console.log("No repositories indexed yet.")
+        return
+      }
+      yield* Console.log("")
+      for (const status of statuses) {
+        yield* Console.log(formatStatus(status))
+        yield* Console.log("")
+      }
+    })
+)
+
+// 5. MCP command (Model Context Protocol stdio server)
 const mcpCommand = Command.make("mcp", {}, () =>
   Effect.gen(function* () {
     const store = yield* IndexStore
     yield* store.initSchema()
     const runtime = yield* Effect.runtime<
-      IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path
+      IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path
     >()
     const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
     yield* Effect.promise(() => startMcpServer(managedRuntime))
@@ -113,7 +147,7 @@ const mcpCommand = Command.make("mcp", {}, () =>
 
 // Root command
 const rootCommand = Command.make("codegraph").pipe(
-  Command.withSubcommands([indexCommand, statsCommand, serveCommand, mcpCommand])
+  Command.withSubcommands([indexCommand, statsCommand, coverageCommand, serveCommand, mcpCommand])
 )
 
 export const cli = Command.run(rootCommand, {
@@ -128,6 +162,9 @@ export const MainLive = Layer.unwrapEffect(
     const SqlLive = Sqlite.SqliteClient.layer({ filename: config.dbPath })
     const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
     const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
+    const DiagnosticsServiceLive = DiagnosticsLive.pipe(
+      Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
+    )
     const WalkerLive = FileWalkerLive.pipe(Layer.provide(NodeContext.layer))
     const IndexerServiceLive = IndexerLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, NodeContext.layer))
@@ -140,6 +177,7 @@ export const MainLive = Layer.unwrapEffect(
       WalkerLive,
       ParserLive,
       IndexerServiceLive,
+      DiagnosticsServiceLive,
       NodeContext.layer
     )
   })

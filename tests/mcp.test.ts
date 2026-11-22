@@ -6,6 +6,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { Effect, Layer, ManagedRuntime } from "effect"
 import { describe, expect } from "vitest"
 import { createMcpServer } from "../src/mcp/index.js"
+import { type Diagnostics, DiagnosticsLive } from "../src/services/Diagnostics.js"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
 import { type GraphQuery, GraphQueryLive } from "../src/services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
@@ -44,7 +45,7 @@ export class MemoryDataService implements DataService {
 
         // Create runtime and MCP server
         const runtime = yield* Effect.runtime<
-          IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path
+          IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path
         >()
         const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
         const mcpServer = createMcpServer(managedRuntime)
@@ -74,6 +75,7 @@ export class MemoryDataService implements DataService {
         expect(toolNames).toContain("find_references")
         expect(toolNames).toContain("neighborhood")
         expect(toolNames).toContain("read_file_range")
+        expect(toolNames).toContain("index_status")
 
         const callToolHandler = handlers.get(CallToolRequestSchema.shape.method.value)
         if (!callToolHandler) throw new Error("call tool handler not registered")
@@ -101,7 +103,12 @@ export class MemoryDataService implements DataService {
         expect(repoMapResult.content[0]?.text).toContain("service.ts:")
         expect(repoMapResult.content[0]?.text).toContain("DataService")
 
-        // 5. Test read_file_range
+        // 5. Test index_status
+        const statusResult = yield* callTool("index_status", { repoId: report.repoId })
+        expect(statusResult.content[0]?.text).toContain("coverage:")
+        expect(statusResult.content[0]?.text).toContain("unresolved edges:")
+
+        // 6. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
@@ -119,12 +126,21 @@ export class MemoryDataService implements DataService {
           const SqlLive = Sqlite.SqliteClient.layer({ filename: ":memory:" })
           const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
           const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
+          const DiagnosticsServiceLive = DiagnosticsLive.pipe(
+            Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
+          )
           const PlatformLive = Layer.merge(NodeFileSystem.layer, NodePath.layer)
           const WalkerLive = FileWalkerLive.pipe(Layer.provide(PlatformLive))
           const IndexerTestLive = IndexerLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, PlatformLive))
           )
-          return Layer.mergeAll(IndexerTestLive, StoreLive, QueryLive, PlatformLive)
+          return Layer.mergeAll(
+            IndexerTestLive,
+            StoreLive,
+            QueryLive,
+            DiagnosticsServiceLive,
+            PlatformLive
+          )
         })()
       )
     )

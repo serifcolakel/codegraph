@@ -8,6 +8,7 @@ import {
   McpError
 } from "@modelcontextprotocol/sdk/types.js"
 import { Effect, type ManagedRuntime, Schema } from "effect"
+import { Diagnostics, formatStatus } from "../services/Diagnostics.js"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { IndexStore } from "../services/IndexStore.js"
 
@@ -53,9 +54,14 @@ export const ReadFileRangeInput = Schema.Struct({
 })
 export type ReadFileRangeInput = typeof ReadFileRangeInput.Type
 
+export const IndexStatusInput = Schema.Struct({
+  repoId: Schema.optional(Schema.String)
+})
+export type IndexStatusInput = typeof IndexStatusInput.Type
+
 export const createMcpServer = <R>(
   runtime: ManagedRuntime.ManagedRuntime<
-    IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path | R,
+    IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path | R,
     unknown
   >
 ) => {
@@ -148,6 +154,17 @@ export const createMcpServer = <R>(
               }
             },
             required: ["symbolId"]
+          }
+        },
+        {
+          name: "index_status",
+          description:
+            "Reports parse coverage, language mix and unresolved edge diagnostics for an indexed repository.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              repoId: { type: "string", description: "Optional repo ID" }
+            }
           }
         },
         {
@@ -287,6 +304,19 @@ export const createMcpServer = <R>(
           return { content: [{ type: "text", text: output }] }
         }
 
+        case "index_status": {
+          const args = Schema.decodeUnknownSync(IndexStatusInput)(rawArgs ?? {})
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const diagnostics = yield* Diagnostics
+              const repoId = yield* getTargetRepoId(args.repoId)
+              const status = yield* diagnostics.repoStatus(repoId)
+              return formatStatus(status)
+            })
+          )
+          return { content: [{ type: "text", text }] }
+        }
+
         case "read_file_range": {
           const args = Schema.decodeUnknownSync(ReadFileRangeInput)(rawArgs ?? {})
           const text = await runtime.runPromise(
@@ -341,7 +371,7 @@ export const createMcpServer = <R>(
 
 export const startMcpServer = <R>(
   runtime: ManagedRuntime.ManagedRuntime<
-    IndexStore | GraphQuery | FileSystem.FileSystem | Path.Path | R,
+    IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path | R,
     unknown
   >
 ) => {
