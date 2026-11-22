@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "codegraph": "bun run src/cli/index.ts",
+    "codegraph": "node dist/cli/index.js",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",

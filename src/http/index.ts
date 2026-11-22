@@ -45,7 +45,25 @@ export const makeHttpRouter = Effect.gen(function* () {
       })
     ),
 
-    // 2. GET /api/graph?repo=&level=file|symbol&focus=&depth=
+    // 2. DELETE /api/repos/:id - remove an index
+    HttpRouter.del(
+      "/api/repos/:id",
+      Effect.gen(function* () {
+        const params = yield* HttpRouter.schemaParams(Schema.Struct({ id: Schema.String }))
+        const repoId = decodeURIComponent(params.id)
+
+        const deleted = yield* store.deleteRepo(repoId).pipe(Effect.either)
+        if (Either.isLeft(deleted)) {
+          return yield* HttpServerResponse.json({ error: deleted.left.message }, { status: 500 })
+        }
+        if (!deleted.right) {
+          return yield* HttpServerResponse.json({ error: "Repository not found." }, { status: 404 })
+        }
+        return yield* HttpServerResponse.json({ deleted: true, repoId })
+      })
+    ),
+
+    // 3. GET /api/graph?repo=&level=file|symbol&focus=&depth=
     HttpRouter.get(
       "/api/graph",
       Effect.gen(function* () {

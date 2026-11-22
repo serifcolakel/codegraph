@@ -44,6 +44,7 @@ export interface IndexStore {
     parsed: ParsedFile
   ) => Effect.Effect<void, StoreError>
   readonly deleteFiles: (fileIds: readonly string[]) => Effect.Effect<void, StoreError>
+  readonly deleteRepo: (repoId: string) => Effect.Effect<boolean, StoreError>
   readonly resolveEdges: (
     repoId: string,
     packageMappings?: readonly PackageMapping[]
@@ -173,6 +174,46 @@ export const IndexStoreLive = Layer.effect(
           .pipe(
             Effect.mapError((e) => new StoreError({ message: "Failed to delete files", cause: e }))
           )
+      })
+
+    const deleteRepo = (repoId: string): Effect.Effect<boolean, StoreError> =>
+      Effect.gen(function* () {
+        const existing = yield* sql<{ id: string }>`
+          SELECT id FROM repos WHERE id = ${repoId} LIMIT 1;
+        `.pipe(Effect.mapError((e) => new StoreError({ message: "Failed to find repo", cause: e })))
+
+        if (existing.length === 0) return false
+
+        yield* sql
+          .withTransaction(
+            Effect.gen(function* () {
+              yield* sql`
+                DELETE FROM symbols_fts WHERE symbol_id IN (
+                  SELECT symbols.id FROM symbols
+                  JOIN files ON files.id = symbols.file_id
+                  WHERE files.repo_id = ${repoId}
+                );
+              `
+              yield* sql`
+                DELETE FROM edges WHERE src_symbol_id IN (
+                  SELECT symbols.id FROM symbols
+                  JOIN files ON files.id = symbols.file_id
+                  WHERE files.repo_id = ${repoId}
+                ) OR dst_symbol_id IN (
+                  SELECT symbols.id FROM symbols
+                  JOIN files ON files.id = symbols.file_id
+                  WHERE files.repo_id = ${repoId}
+                );
+              `
+              // Cascades to the repo's files and symbols.
+              yield* sql`DELETE FROM repos WHERE id = ${repoId};`
+            })
+          )
+          .pipe(
+            Effect.mapError((e) => new StoreError({ message: "Failed to delete repo", cause: e }))
+          )
+
+        return true
       })
 
     const saveFileIndex = (
@@ -637,6 +678,7 @@ export const IndexStoreLive = Layer.effect(
       getFiles,
       saveFileIndex,
       deleteFiles,
+      deleteRepo,
       resolveEdges,
       getStats,
       getCoverage,

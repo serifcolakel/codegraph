@@ -1092,40 +1092,183 @@
 
       .toast {
         position: fixed;
-        left: 50%;
-        bottom: 26px;
-        transform: translate(-50%, 12px);
-        padding: 10px 16px;
-        border-radius: 999px;
+        right: 24px;
+        top: 24px;
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        min-width: 270px;
+        max-width: min(92vw, 420px);
+        padding: 12px 13px 14px;
+        border-radius: 14px;
         border: 1px solid var(--line-strong);
         background: var(--bg-elevated);
         color: var(--text);
-        font-size: 0.78rem;
-        box-shadow: var(--shadow);
+        box-shadow: 0 26px 60px -26px rgba(2, 6, 23, 0.7);
         opacity: 0;
+        transform: translateY(-14px) scale(0.98);
         pointer-events: none;
+        overflow: hidden;
         transition:
-          opacity 0.2s ease,
-          transform 0.2s ease;
+          opacity 0.22s ease,
+          transform 0.22s ease;
         z-index: 100;
-        max-width: min(90vw, 520px);
-        text-align: center;
       }
 
       .toast.show {
         opacity: 1;
-        transform: translate(-50%, 0);
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .toast-icon {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .toast-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .toast-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        padding-top: 1px;
+      }
+
+      .toast-title {
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      .toast-message {
+        font-size: 0.82rem;
+        line-height: 1.45;
+        color: var(--text);
+        overflow-wrap: anywhere;
+      }
+
+      .toast-close {
+        flex: none;
+        margin-left: auto;
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-faint);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      .toast-close:hover {
+        color: var(--text);
+        background: var(--surface-soft);
+      }
+
+      .toast-close svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      .toast-progress {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        height: 3px;
+        width: 100%;
+        background: var(--accent);
+        transform-origin: left center;
+        transform: scaleX(0);
+        opacity: 0.85;
+      }
+
+      .toast.show .toast-progress {
+        animation: toast-progress 3.6s linear forwards;
+      }
+
+      @keyframes toast-progress {
+        from {
+          transform: scaleX(1);
+        }
+        to {
+          transform: scaleX(0);
+        }
+      }
+
+      .toast.success .toast-icon {
+        background: rgba(13, 148, 136, 0.14);
+        color: var(--teal);
+      }
+
+      .toast.success .toast-progress {
+        background: var(--teal);
       }
 
       .toast.error {
-        border-color: rgba(248, 113, 113, 0.5);
+        border-color: rgba(248, 113, 113, 0.42);
+      }
+
+      .toast.error .toast-icon {
+        background: rgba(220, 38, 38, 0.12);
         color: var(--danger);
+      }
+
+      .toast.error .toast-title {
+        color: rgba(220, 38, 38, 0.85);
+      }
+
+      .toast.error .toast-progress {
+        background: var(--danger);
       }
 
       .icon-btn.accent {
         color: var(--accent);
         background: var(--accent-soft);
         border-color: rgba(138, 164, 255, 0.32);
+      }
+
+      .icon-btn.danger {
+        color: var(--danger);
+        background: rgba(220, 38, 38, 0.08);
+        border-color: rgba(220, 38, 38, 0.24);
+      }
+
+      .icon-btn.danger:hover {
+        color: #fff;
+        background: rgba(220, 38, 38, 0.88);
+        border-color: rgba(220, 38, 38, 0.92);
+      }
+
+      .danger-btn {
+        border: 0;
+        color: #fff;
+        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        box-shadow: 0 10px 24px -12px rgba(220, 38, 38, 0.8);
+      }
+
+      .danger-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .danger-btn:disabled {
+        opacity: 0.6;
+        cursor: wait;
       }
 
       .modal {
@@ -1241,6 +1384,16 @@
         accent-color: var(--accent-strong);
       }
 
+      .modal-warning {
+        font-size: 0.84rem;
+        line-height: 1.55;
+        color: var(--text-dim);
+      }
+
+      .modal-warning strong {
+        color: var(--text);
+      }
+
       .modal-error {
         padding: 9px 11px;
         border-radius: 9px;
@@ -1263,7 +1416,8 @@
       }
 
       .primary-btn,
-      .ghost-btn {
+      .ghost-btn,
+      .danger-btn {
         height: 38px;
         padding: 0 15px;
         border-radius: 10px;
@@ -1459,6 +1613,28 @@
             >
               <path d="M20 11a8 8 0 1 0-2.3 5.7" />
               <path d="M20 5v6h-6" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            id="deleteRepoBtn"
+            class="icon-btn danger"
+            title="Delete index"
+            aria-label="Delete index"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 7h16M10 11v6M14 11v6" />
+              <path d="M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12" />
+              <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
             </svg>
           </button>
 
@@ -1788,7 +1964,55 @@
       </form>
     </dialog>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="deleteModal" class="modal" aria-labelledby="deleteModalTitle">
+      <div class="modal-header">
+        <div>
+          <div id="deleteModalTitle" class="modal-title">Delete index</div>
+          <div class="modal-sub">This cannot be undone.</div>
+        </div>
+        <button
+          type="button"
+          id="deleteCloseBtn"
+          class="icon-btn"
+          title="Close"
+          aria-label="Close"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-warning">
+          Delete the index for <strong id="deleteRepoName">—</strong>? All indexed files,
+          symbols, edges and search data for this repository will be removed. The files on
+          disk are not touched.
+        </p>
+        <p id="deleteRepoPath" class="modal-sub"></p>
+        <p id="deleteError" class="modal-error" hidden></p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="deleteCancelBtn" class="ghost-btn">Cancel</button>
+        <button type="button" id="deleteConfirmBtn" class="danger-btn">Delete index</button>
+      </div>
+    </dialog>
+
+    <div
+      id="toast"
+      class="toast"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
 
     <script>
       const $ = (id) => document.getElementById(id);
@@ -1832,14 +2056,71 @@
         reference: "#f472b6",
       };
 
+      const nodeIconPaths = {
+        file: '<path d="M6 2.5h7l5 5v14H6z"/><path d="M13 2.5v5h5"/>',
+        class:
+          '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 10h8M8 14h5"/>',
+        function:
+          '<path d="M6.5 21c3 0 4-2 4-5V9c0-3 1-5 4-5"/><path d="M9 12h5"/>',
+        interface:
+          '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/>',
+        type: '<path d="M5 5h14M12 5v14"/>',
+        const: '<path d="M12 3.5l8.5 8.5-8.5 8.5L3.5 12z"/>',
+        method:
+          '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5"/>',
+        property: '<circle cx="12" cy="12" r="4.5"/>',
+        enum:
+          '<path d="M8.5 6h11M8.5 12h11M8.5 18h11"/><circle cx="4.5" cy="6" r="1.1"/><circle cx="4.5" cy="12" r="1.1"/><circle cx="4.5" cy="18" r="1.1"/>',
+      };
+
+      const nodeIcons = Object.fromEntries(
+        Object.entries(nodeIconPaths).map(([kind, paths]) => [
+          kind,
+          `data:image/svg+xml;utf8,${encodeURIComponent(
+            `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`,
+          )}`,
+        ]),
+      );
+
       const prefersReducedMotion = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
 
+      const toastIcons = {
+        info: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+        error:
+          '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 20h19z"/><path d="M12 9v5M12 17h.01"/></svg>',
+        close:
+          '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+      };
+
+      function hideToast() {
+        const el = $("toast");
+        el.classList.remove("show");
+        clearTimeout(toast.timer);
+      }
+
       function toast(message, isError) {
         const el = $("toast");
-        el.textContent = message;
-        el.classList.toggle("error", Boolean(isError));
+        const variant = isError ? "error" : "success";
+        el.classList.remove("error", "success");
+        el.classList.add(variant);
+        el.innerHTML = `
+          <span class="toast-icon">${isError ? toastIcons.error : toastIcons.info}</span>
+          <span class="toast-body">
+            <span class="toast-title">${isError ? "Error" : "Info"}</span>
+            <span class="toast-message"></span>
+          </span>
+          <button type="button" class="toast-close" aria-label="Dismiss">
+            ${toastIcons.close}
+          </button>
+          <span class="toast-progress"></span>
+        `;
+        el.querySelector(".toast-message").textContent = message;
+        el.querySelector(".toast-close").addEventListener("click", hideToast);
+
+        el.classList.remove("show");
+        void el.offsetWidth;
         el.classList.add("show");
         clearTimeout(toast.timer);
         toast.timer = setTimeout(() => el.classList.remove("show"), 3600);
@@ -1970,6 +2251,12 @@
                 "text-halign": "center",
                 "text-margin-y": 7,
                 "background-color": "data(color)",
+                "background-image": "data(icon)",
+                "background-fit": "none",
+                "background-width": "12px",
+                "background-height": "12px",
+                "background-position-x": "50%",
+                "background-position-y": "50%",
                 width: "data(size)",
                 height: "data(size)",
                 "border-width": 2,
@@ -1994,7 +2281,7 @@
               },
             },
             {
-              selector: "node(kind != 'file')",
+              selector: "node[kind != 'file']",
               style: {
                 "text-outline-width": 3,
               },
@@ -2017,6 +2304,7 @@
                 "text-outline-width": 0,
                 "min-zoomed-font-size": 6,
                 padding: 12,
+                "background-image": "none",
               },
             },
             {
@@ -2026,7 +2314,7 @@
                 "border-width": 3,
                 "overlay-color": "#8aa4ff",
                 "overlay-opacity": 0.08,
-                "overlay-padding": 8,
+                "overlay-padding": 6,
               },
             },
             {
@@ -2069,17 +2357,45 @@
             },
             {
               selector: ".dimmed",
-              style: { opacity: 0.16 },
+              style: { opacity: 0.5 },
+            },
+            {
+              selector: "edge.focused-edge",
+              style: {
+                opacity: 0.95,
+                width: 2.4,
+              },
             },
           ],
         });
 
-        state.cy.on("mouseover", "node", (event) =>
-          event.target.addClass("hover"),
-        );
-        state.cy.on("mouseout", "node", (event) =>
-          event.target.removeClass("hover"),
-        );
+        state.cy.on("mouseover", "node", (event) => {
+          const node = event.target;
+          const cy = state.cy;
+          let related;
+          if (node.data("isGroup")) {
+            related = node.descendants().union(node);
+            related = related.union(related.edgesWith(related));
+          } else {
+            related = node.closedNeighborhood();
+            if (node.parent().nonempty()) related = related.union(node.parent());
+          }
+          cy.elements().addClass("dimmed");
+          related.removeClass("dimmed");
+          related.nodes().addClass("hover");
+          related.edges().addClass("focused-edge");
+        });
+
+        state.cy.on("mouseout", "node", () => {
+          state.cy.elements().removeClass("dimmed focused-edge");
+          state.cy.nodes().removeClass("hover");
+        });
+
+        state.cy.on("mouseout", (event) => {
+          if (event.target !== state.cy) return;
+          state.cy.elements().removeClass("dimmed focused-edge");
+          state.cy.nodes().removeClass("hover");
+        });
 
         state.cy.on("tap", "node", (event) => {
           const node = event.target;
@@ -2093,6 +2409,8 @@
         state.cy.on("tap", (event) => {
           if (event.target === state.cy) {
             state.cy.elements().unselect();
+            state.cy.elements().removeClass("dimmed focused-edge");
+            state.cy.nodes().removeClass("hover");
           }
         });
 
@@ -2306,6 +2624,7 @@
 
         for (const node of nodes) {
           const isFile = typeof node.path === "string";
+          const kind = isFile ? "file" : node.kind;
           const size = Math.max(
             isFile ? 26 : 22,
             Math.min(64, 24 + (node.inDegree || 0) * 4),
@@ -2315,9 +2634,10 @@
               id: node.id,
               label: isFile ? node.path.split("/").pop() : node.name,
               path: node.path,
-              color: kindColors[isFile ? "file" : node.kind] || "#94a3b8",
+              color: kindColors[kind] || "#94a3b8",
+              icon: nodeIcons[kind] || nodeIcons.property,
               size,
-              kind: isFile ? "file" : node.kind,
+              kind,
               inDegree: node.inDegree || 0,
               tooltip: isFile
                 ? node.path
@@ -2355,27 +2675,50 @@
         }
 
         const cypher = state.cy;
+        cypher.elements().removeClass("dimmed focused-edge");
+        cypher.nodes().removeClass("hover");
         cypher.elements().remove();
         cypher.add(elements);
         applyCyTheme();
         applyKindFilters();
-        if (presetPositions) {
-          cypher
-            .layout({
+        const layout = presetPositions
+          ? cypher.layout({
               name: "preset",
               positions: presetPositions,
               fit: true,
               padding: 60,
             })
-            .run();
-        } else {
-          cypher.layout(layoutOptions(nodes.length)).run();
-        }
-        const visible = cypher
-          .elements()
-          .filter((element) => element.visible());
-        cypher.fit(visible.length > 0 ? visible : cypher.elements(), 48);
+          : cypher.layout(layoutOptions(nodes.length));
+        layout.one("layoutstop", () => {
+          const visible = cypher
+            .elements()
+            .filter((element) => element.visible());
+          cypher.fit(visible.length > 0 ? visible : cypher.elements(), 48);
+        });
+        layout.run();
         updateVisibleStats();
+      }
+
+      function resetWorkspace() {
+        state.repoId = "";
+        state.repoPath = "";
+        state.focus = null;
+        state.started = false;
+        state.history = [];
+        if (state.cy) {
+          state.cy.elements().removeClass("dimmed focused-edge");
+          state.cy.nodes().removeClass("hover");
+          state.cy.elements().remove();
+        }
+        $("panelContent").hidden = true;
+        $("panelEmpty").hidden = false;
+        $("repoPath").textContent = "Index a folder to get started.";
+        $("viewModeLabel").textContent = "No repository";
+        $("searchInput").value = "";
+        setSearchOpen(false);
+        setStats(0, 0);
+        clearHash();
+        updateBackButton();
       }
 
       async function loadRepos(preferredRepoId) {
@@ -2388,8 +2731,7 @@
           const option = document.createElement("option");
           option.textContent = "No repos indexed";
           select.appendChild(option);
-          $("repoPath").textContent = "Index a folder to get started.";
-          setStats(0, 0);
+          resetWorkspace();
           toast("No repositories indexed yet. Use the Index button.", true);
           return;
         }
@@ -2761,6 +3103,64 @@
         else dialog.removeAttribute("open");
       }
 
+      function openDeleteModal() {
+        const repo = state.repos.find((item) => item.id === state.repoId);
+        if (!repo) {
+          toast("Select a repository first.", true);
+          return;
+        }
+        $("deleteRepoName").textContent = repo.name;
+        $("deleteRepoPath").textContent = repo.rootPath;
+        $("deleteError").hidden = true;
+        $("deleteError").textContent = "";
+        $("deleteConfirmBtn").disabled = false;
+        $("deleteConfirmBtn").textContent = "Delete index";
+        const dialog = $("deleteModal");
+        if (typeof dialog.showModal === "function") dialog.showModal();
+        else dialog.setAttribute("open", "");
+      }
+
+      function closeDeleteModal() {
+        const dialog = $("deleteModal");
+        if (typeof dialog.close === "function") dialog.close();
+        else dialog.removeAttribute("open");
+      }
+
+      async function confirmDeleteRepo() {
+        const repo = state.repos.find((item) => item.id === state.repoId);
+        if (!repo) {
+          closeDeleteModal();
+          return;
+        }
+
+        $("deleteError").hidden = true;
+        $("deleteConfirmBtn").disabled = true;
+        $("deleteConfirmBtn").textContent = "Deleting…";
+        showLoading(true, "Deleting index…");
+        try {
+          await fetchJson(`/api/repos/${encodeURIComponent(repo.id)}`, {
+            method: "DELETE",
+          });
+          closeDeleteModal();
+          closePanel();
+          state.repoId = "";
+          state.repoPath = "";
+          state.history = [];
+          state.started = false;
+          updateBackButton();
+          clearHash();
+          await loadRepos();
+          toast(`Deleted index for ${repo.name}`);
+        } catch (error) {
+          $("deleteError").textContent = error.message;
+          $("deleteError").hidden = false;
+        } finally {
+          showLoading(false);
+          $("deleteConfirmBtn").disabled = false;
+          $("deleteConfirmBtn").textContent = "Delete index";
+        }
+      }
+
       async function submitIndex(event) {
         event.preventDefault();
         const rootPath = $("indexPath").value.trim();
@@ -2895,6 +3295,16 @@
         if (event.target === $("indexModal")) closeIndexModal();
       });
 
+      $("deleteRepoBtn").addEventListener("click", openDeleteModal);
+      $("deleteCancelBtn").addEventListener("click", closeDeleteModal);
+      $("deleteCloseBtn").addEventListener("click", closeDeleteModal);
+      $("deleteConfirmBtn").addEventListener("click", () => {
+        confirmDeleteRepo().catch(() => {});
+      });
+      $("deleteModal").addEventListener("click", (event) => {
+        if (event.target === $("deleteModal")) closeDeleteModal();
+      });
+
       $("viewFileBtn").addEventListener("click", () => {
         clearHash();
         loadFileGraph().catch(() => {});
@@ -2922,11 +3332,16 @@
 
       $("resetLayoutBtn").addEventListener("click", () => {
         if (!state.cy) return;
-        state.cy.layout(layoutOptions(state.cy.nodes().length)).run();
         const visible = state.cy
           .elements()
           .filter((element) => element.visible());
-        state.cy.fit(visible.length > 0 ? visible : state.cy.elements(), 48);
+        const eles = visible.length > 0 ? visible : state.cy.elements();
+        if (eles.length === 0) return;
+        if (prefersReducedMotion) {
+          state.cy.fit(eles, 48);
+        } else {
+          state.cy.animate({ fit: { eles, padding: 48 }, duration: 260 });
+        }
       });
 
       $("themeToggleBtn").addEventListener("click", () => {

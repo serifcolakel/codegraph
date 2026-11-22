@@ -102,6 +102,35 @@ describe("HTTP API & visualization", () => {
               fetch(`http://127.0.0.1:${TEST_PORT}/api/repos`).then((r) => r.json())
             )
             expect(reposAfter.length).toBe(2)
+
+            // 9. DELETE /api/repos/:id removes an index without touching files
+            const secondRepo = reposAfter.find(
+              (repo: { name: string }) => repo.name === "second-repo"
+            )
+            expect(secondRepo).toBeDefined()
+            const deleteRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/repos/${encodeURIComponent(secondRepo.id)}`,
+                { method: "DELETE" }
+              ).then((r) => r.json())
+            )
+            expect(deleteRes.deleted).toBe(true)
+
+            const reposAfterDelete = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/repos`).then((r) => r.json())
+            )
+            expect(reposAfterDelete.length).toBe(1)
+
+            const secondFiles = yield* fs.readDirectory(secondDir)
+            expect(secondFiles).toContain("other.ts")
+
+            const deleteMissing = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/repos/${encodeURIComponent(secondRepo.id)}`,
+                { method: "DELETE" }
+              ).then((r) => r.status)
+            )
+            expect(deleteMissing).toBe(404)
           })
         )
       } finally {
