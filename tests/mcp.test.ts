@@ -105,26 +105,16 @@ function unusedHelper(): number {
         )) as ToolListResult
         const toolNames = toolsList.tools.map((t) => t.name)
 
-        expect(toolNames).toContain("repo_map")
-        expect(toolNames).toContain("outline_file")
-        expect(toolNames).toContain("search_symbol")
-        expect(toolNames).toContain("find_references")
-        expect(toolNames).toContain("neighborhood")
-        expect(toolNames).toContain("read_file_range")
-        expect(toolNames).toContain("index_status")
-        expect(toolNames).toContain("get_graph_schema")
-        expect(toolNames).toContain("get_code_snippet")
-        expect(toolNames).toContain("search_code")
-        expect(toolNames).toContain("list_projects")
-        expect(toolNames).toContain("index_repository")
-        expect(toolNames).toContain("index_job_status")
-        expect(toolNames).toContain("delete_project")
-        expect(toolNames).toContain("search_graph")
-        expect(toolNames).toContain("query_graph")
-        expect(toolNames).toContain("analyze_graph")
-        expect(toolNames).toContain("get_architecture")
-        expect(toolNames).toContain("trace_path")
-        expect(toolNames).toContain("detect_changes")
+        expect(toolNames).toEqual([
+          "index_repository",
+          "search_graph",
+          "search_code",
+          "get_code_snippet",
+          "trace_path",
+          "get_architecture",
+          "analyze_graph",
+          "query_graph"
+        ])
 
         const callToolHandler = handlers.get(CallToolRequestSchema.shape.method.value)
         if (!callToolHandler) throw new Error("call tool handler not registered")
@@ -134,32 +124,40 @@ function unusedHelper(): number {
             callToolHandler({ method: "tools/call", params: { name, arguments: args } })
           ).pipe(Effect.map((result) => result as ToolCallResult))
 
-        // 2. Test search_symbol
-        const searchResult = yield* callTool("search_symbol", { query: "MemoryDataService" })
+        // 2. Test BM25 symbol search
+        const searchResult = yield* callTool("search_graph", { query: "MemoryDataService" })
         expect(searchResult.content[0]?.text).toContain("MemoryDataService")
         expect(searchResult.content[0]?.text).toContain("service.ts")
 
-        // 3. Test outline_file
-        const outlineResult = yield* callTool("outline_file", {
+        // 3. Test file outline
+        const outlineResult = yield* callTool("get_architecture", {
+          view: "outline",
           path: "service.ts",
           repoId: report.repoId
         })
         expect(outlineResult.content[0]?.text).toContain("DataService")
         expect(outlineResult.content[0]?.text).toContain("MemoryDataService")
 
-        // 4. Test repo_map
-        const repoMapResult = yield* callTool("repo_map", { repoId: report.repoId })
+        // 4. Test repository map
+        const repoMapResult = yield* callTool("get_architecture", {
+          view: "map",
+          repoId: report.repoId
+        })
         expect(repoMapResult.content[0]?.text).toContain("service.ts:")
         expect(repoMapResult.content[0]?.text).toContain("DataService")
 
         // 5. Test index_status
-        const statusResult = yield* callTool("index_status", { repoId: report.repoId })
+        const statusResult = yield* callTool("index_repository", {
+          action: "status",
+          repoId: report.repoId
+        })
         expect(statusResult.content[0]?.text).toContain("coverage:")
         expect(statusResult.content[0]?.text).toContain("unresolved edges:")
         expect(statusResult.content[0]?.text).toContain("freshness: stale=false")
 
         // 6. Test detect_changes error path on a non-git directory
-        const detectResult = (yield* callTool("detect_changes", {
+        const detectResult = (yield* callTool("analyze_graph", {
+          analysis: "changes",
           repoId: report.repoId
         })) as ToolCallResult & { readonly isError?: boolean }
         expect(detectResult.content[0]?.text).toContain("Failed to read git changes")
@@ -178,6 +176,19 @@ function unusedHelper(): number {
 
         const missingTrace = yield* callTool("trace_path", { selector: "service.Missing" })
         expect(missingTrace.content[0]?.text).toContain("No symbol matched")
+
+        const references = yield* callTool("trace_path", {
+          selector: "service.leaf",
+          mode: "references"
+        })
+        expect(references.content[0]?.text).toContain("middle")
+
+        const neighborhood = yield* callTool("trace_path", {
+          selector: "service.leaf",
+          mode: "neighborhood",
+          depth: 1
+        })
+        expect(neighborhood.content[0]?.text).toContain("Nodes (")
 
         // 8. Test get_architecture
         const architectureResult = yield* callTool("get_architecture", { repoId: report.repoId })
@@ -208,7 +219,7 @@ function unusedHelper(): number {
 
         let jobText = ""
         for (let attempt = 0; attempt < 100; attempt++) {
-          const status = yield* callTool("index_job_status", { jobId })
+          const status = yield* callTool("index_repository", { action: "job", jobId })
           jobText = status.content[0]?.text ?? ""
           if (jobText.includes("status=completed") || jobText.includes("status=failed")) break
           yield* Effect.sleep("50 millis")
@@ -217,7 +228,7 @@ function unusedHelper(): number {
         expect(jobText).toContain("repoId:")
 
         // 11. Test list_projects
-        const projectsResult = yield* callTool("list_projects", {})
+        const projectsResult = yield* callTool("index_repository", { action: "list" })
         expect(projectsResult.content[0]?.text).toContain("mcp-test-repo")
         expect(projectsResult.content[0]?.text).toContain(report.repoId)
 
@@ -250,14 +261,16 @@ function unusedHelper(): number {
         expect(communities.content[0]?.text).toContain("analysis=communities")
 
         // 13. Test compare_snapshots
-        const snapshotComparison = yield* callTool("compare_snapshots", {
+        const snapshotComparison = yield* callTool("analyze_graph", {
+          analysis: "snapshots",
           repoId: report.repoId
         })
         expect(snapshotComparison.content[0]?.text).toContain("snapshots")
         expect(snapshotComparison.content[0]?.text).toContain("files:")
 
         // 14. Test cross_repo_links
-        const crossLinks = yield* callTool("cross_repo_links", {
+        const crossLinks = yield* callTool("trace_path", {
+          mode: "cross_repo",
           repoId: report.repoId,
           refresh: true
         })
@@ -308,7 +321,10 @@ function unusedHelper(): number {
         expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
 
         // 19. Test get_graph_schema
-        const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
+        const schemaResult = yield* callTool("get_architecture", {
+          view: "schema",
+          repoId: report.repoId
+        })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
@@ -334,8 +350,23 @@ function unusedHelper(): number {
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 22. Test read_file_range
-        const readRangeResult = yield* callTool("read_file_range", {
+        const searchCodeFiles = yield* callTool("search_code", {
+          query: "MemoryDataService",
+          mode: "files",
+          repoId: report.repoId
+        })
+        expect(searchCodeFiles.content[0]?.text).toContain("service.ts")
+
+        const searchCodeFull = yield* callTool("search_code", {
+          query: "MemoryDataService",
+          mode: "full",
+          context: 1,
+          repoId: report.repoId
+        })
+        expect(searchCodeFull.content[0]?.text).toContain("mode=full")
+
+        // 22. Test exact file range
+        const readRangeResult = yield* callTool("get_code_snippet", {
           path: "service.ts",
           startLine: 1,
           endLine: 5,
@@ -345,9 +376,12 @@ function unusedHelper(): number {
         expect(readRangeResult.content[0]?.text).toContain("DataService")
 
         // 23. Test delete_project
-        const deleteResult = yield* callTool("delete_project", { repoId: report.repoId })
+        const deleteResult = yield* callTool("index_repository", {
+          action: "delete",
+          repoId: report.repoId
+        })
         expect(deleteResult.content[0]?.text).toContain("Deleted index")
-        const projectsAfterDelete = yield* callTool("list_projects", {})
+        const projectsAfterDelete = yield* callTool("index_repository", { action: "list" })
         expect(projectsAfterDelete.content[0]?.text).toContain("No repositories indexed")
       } finally {
         yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.ignore)

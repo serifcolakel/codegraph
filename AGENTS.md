@@ -14,16 +14,17 @@
 
 When a CodeGraph index exists, prefer MCP tools over `grep`/file search:
 
-1. `index_status` — check coverage/freshness; re-index only when `stale=true`.
-2. `search_graph` — find symbols by name, kind, file or degree; add `semantic: true` for intent search.
-3. `get_code_snippet` — read the exact source for one qualified name.
-4. `trace_path` — callers/callees and impact; use `search_code` only for literal text.
-5. `query_graph` — read-only Cypher subset for custom graph questions.
-6. `analyze_graph` — architecture, hotspots, dead code, cycles, duplicates.
-7. `detect_changes` — blast radius before finishing.
+1. `index_repository` — `action=status` for coverage/freshness; `action=index` only when `stale=true`; `action=job` for async runs; `action=list|delete` to manage repos.
+2. `search_graph` — symbols by `query`, `namePattern`, kind, file and degree; `semantic=true` for intent search.
+3. `get_code_snippet` — source for a `qualifiedName`, or an exact `path` + line range.
+4. `trace_path` — `calls`, `data_flow`, `cross_file`, `references`, `neighborhood`, `cross_repo`.
+5. `get_architecture` — `summary`, `map`, `outline` (needs path), `schema`.
+6. `analyze_graph` — ranks, hotspots, dead code, cycles, communities, packages, duplicates, `changes`, `snapshots`.
+7. `query_graph` — read-only Cypher subset for custom graph questions.
+8. `search_code` — literal text with `compact|full|files` modes; not for symbol lookup.
 
 - Always cite `file:line` from tool output and treat unresolved edges as unknown.
-- For large repositories use `index_repository` with `async=true`, then poll `index_job_status`.
+- For large repositories use `index_repository` with `async=true`, then `action=job`.
 - Do not force a full re-index for normal work; incremental indexing skips unchanged hashes.
 - Keep MCP responses compact; prefer narrow filters and explicit limits over dumping the graph.
 - MCP, HTTP and CLI must read the same `CODEGRAPH_DB_PATH`.

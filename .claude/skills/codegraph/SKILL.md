@@ -12,13 +12,11 @@ local; no API key or hosted service.
 
 ## First: make sure the index is fresh
 
-Prefer the MCP tools:
-
-1. `index_status` — coverage, unresolved edges and freshness (`stale=true` means
-   disk has added/modified/deleted files).
-2. `index_repository` — incremental index of a path. Use `async=true` for large
-   repositories and poll `index_job_status`.
-3. `list_projects` — discover already indexed repositories.
+1. `index_repository` with `action=status` — coverage, unresolved edges and
+   freshness (`stale=true` means disk has added/modified/deleted files).
+2. `index_repository` with `action=index` — incremental index of a path. Use
+   `async=true` for large repositories and poll with `action=job`.
+3. `index_repository` with `action=list` — discover already indexed repositories.
 
 CLI equivalents:
 
@@ -34,19 +32,15 @@ Automate indexing with `scripts/codegraph-auto-index.mjs` (see
 
 ## Tool selection order
 
-1. `search_graph` — find symbols by name/regex, kind, file and degree.
-2. `get_code_snippet` — read the exact source for a qualified name.
-3. `trace_path` — callers/callees, references, data flow, cross-file.
-4. `find_references` / `neighborhood` — immediate usage and graph context.
-5. `search_code` — literal/regex text inside indexed files.
+1. `search_graph` — symbols by `query`, `namePattern`, kind, file and degree.
+2. `get_code_snippet` — source for a qualified name or an exact line range.
+3. `trace_path` — calls, data flow, cross-file, references, neighborhood,
+   cross-repo links.
+4. `get_architecture` — summary, map, file outline or graph schema.
+5. `analyze_graph` — ranks, hotspots, dead code, cycles, communities, packages,
+   duplicates, git changes, snapshot diffs.
 6. `query_graph` — safe read-only Cypher subset for custom questions.
-7. `analyze_graph` — pagerank/in_degree/complexity, hotspots, dead code,
-   cycles, communities, package rankings.
-8. `get_architecture`, `detect_changes`, `compare_snapshots`,
-   `cross_repo_links`.
-
-Use `repo_map`/`outline_file` for orientation; use `read_file_range` only after
-a symbol lookup.
+7. `search_code` — literal text with compact, full or files mode.
 
 ## Query examples
 

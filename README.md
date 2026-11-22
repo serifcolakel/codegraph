@@ -28,8 +28,8 @@ MCP server.
 - OpenAPI JSON/YAML operations become route nodes; GraphQL types, interfaces,
   enums and fields become typed symbols.
 - Cross-repository matching of HTTP routes and async channels
-  (`cross_repo_links` MCP tool and `link` CLI command).
-- Freshness reporting (`freshness` CLI, `/api/freshness`, `index_status` MCP)
+  (`trace_path` with `mode=cross_repo`, and the `link` CLI command).
+- Freshness reporting (`freshness` CLI, `/api/freshness`, `index_repository action=status`)
   comparing on-disk hashes against the index.
 - Portable repo-scoped graph artifacts: gzip-compressed export/import for team
   baselines (`artifact export/import`), followed by incremental indexing.
@@ -38,7 +38,7 @@ MCP server.
 - Project management in the UI: add, rename (Details dialog), delete and inspect
   coverage; saved views persisted in localStorage; clickable graph minimap.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
-  the `index_status` MCP tool).
+  the `index_repository action=status` MCP tool).
 - Hybrid search: BM25 + local offline embeddings + graph proximity, with
   dependency-free feature-hashing vectors stored in SQLite beside symbols.
 - Near-duplicate detection persists `similar_to` edges between similar symbols.
@@ -168,12 +168,20 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 
 ## MCP server
 
-The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
-`search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
-`index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
-`index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `query_graph`,
-`analyze_graph` (including `semantic` search and `duplicates`), `compare_snapshots`,
-`cross_repo_links`, and `read_file_range`.
+The MCP server exposes eight consolidated tools:
+
+| Tool               | Purpose                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `index_repository` | `action=index/status/list/delete/job`; incremental or async indexing                      |
+| `search_graph`     | BM25, regex, semantic symbol search with kind/file/degree filters and paging              |
+| `search_code`      | Literal text in `compact`, `full` or `files` mode                                         |
+| `get_code_snippet` | Source by qualified name, or an exact file line range                                     |
+| `trace_path`       | Calls, data flow, cross-file, references, neighborhood, cross-repo links                  |
+| `get_architecture` | Summary, ranked map, file outline or graph schema                                         |
+| `analyze_graph`    | Ranks, hotspots, dead code, cycles, communities, packages, duplicates, changes, snapshots |
+| `query_graph`      | Safe read-only Cypher subset                                                              |
+
+Tool options select the mode; there are no separate tools for related operations.
 
 `query_graph` accepts a safe, read-only Cypher subset:
 
@@ -309,19 +317,21 @@ agent prefers the graph over raw text search. The detailed workflow lives in
 A CodeGraph MCP server is available for this repository. Prefer it over grep
 when an index exists:
 
-1. `index_status` — verify coverage and freshness; re-index only if `stale=true`.
-2. `search_graph` — find symbols by name, kind, file or degree. Use
-   `semantic: true` for intent-based search.
-3. `get_code_snippet` — read the exact source for a qualified name.
-4. `trace_path` — callers, callees and impact. Use `search_code` only for
-   literal text.
-5. `query_graph` — read-only Cypher subset for custom questions.
-6. `analyze_graph` — architecture, hotspots, dead code, cycles, duplicates.
-7. `detect_changes` — blast radius before finishing.
+1. `index_repository` — `action=status`; index with `action=index` only when
+   `stale=true`; poll async runs with `action=job`.
+2. `search_graph` — symbols by `query`, `namePattern`, kind, file and degree;
+   use `semantic: true` for intent-based search.
+3. `get_code_snippet` — source for a qualified name or an exact line range.
+4. `trace_path` — calls, data flow, references, neighborhood, cross-repo.
+5. `get_architecture` — summary, map, outline or schema.
+6. `analyze_graph` — hotspots, dead code, cycles, duplicates, changes,
+   snapshots.
+7. `query_graph` — read-only Cypher subset for custom questions.
+8. `search_code` — literal text; not for symbol lookup.
 
 Rules: cite `file:line` from tool output; treat unresolved edges as unknown;
-use `index_repository(async=true)` plus `index_job_status` for large repos; do
-not force a full re-index for normal work.
+use `index_repository(async=true)` plus `action=job` for large repos; do not
+force a full re-index for normal work.
 ```
 
 ## Project layout

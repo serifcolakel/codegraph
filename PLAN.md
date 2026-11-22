@@ -28,7 +28,7 @@ Implemented and verified:
 - Manifest-based package resolution for `package.json`, `go.mod`, `Cargo.toml`
   and `pyproject.toml`.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command,
-  `index_status` MCP tool).
+  `index_repository action=status` MCP tool).
 - Analytics service: PageRank/in-degree/complexity, package rankings,
   communities, hotspots, dead-code candidates, symbol/file/package cycle
   detection and snapshot comparison.
@@ -70,12 +70,11 @@ Implemented and verified:
     and git change impact; rows jump to the graph.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 22 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
-  `query_graph`, `analyze_graph`, `compare_snapshots`, `cross_repo_links`,
-  `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
-  `index_job_status`, `delete_project`, `list_projects`, `find_references`,
-  `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
-  `read_file_range`.
+- MCP server with eight consolidated tools: `index_repository` (index/status/list/
+  delete/job), `search_graph`, `search_code`, `get_code_snippet`, `trace_path`,
+  `get_architecture` (summary/map/outline/schema), `analyze_graph` (including
+  `changes` and `snapshots`) and `query_graph`. Related operations are modes of
+  one tool; the earlier 22-tool surface was merged to reduce prompt tokens.
 - CLI: `index [--watch] [--force]`, `serve`, `daemon`, `stats`, `coverage`, `freshness`, `changes`, `link`, `artifact`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -120,15 +119,15 @@ tests cover one representative construct per language.
 Make the MCP server useful for real repository investigations.
 
 - [x] `index_repository` (index a path into the current database).
-- [x] `list_projects` and `delete_project`.
-- [x] `index_status` and coverage diagnostics.
+- [x] `index_repository` actions `list` and `delete`.
+- [x] `index_repository action=status` and coverage diagnostics.
 - [x] `search_graph` with name regex, kind filters, file scope, degree filters and paging.
-- [x] `get_graph_schema` describing node labels, edge kinds and properties.
-- [x] `get_file_outline` (exposed as `outline_file`).
+- [x] `get_architecture view=schema` describing node labels, edge kinds and properties.
+- [x] `get_file_outline` (exposed as `get_architecture view=outline`).
 - [x] `get_code_snippet` by qualified name.
 - [x] `trace_path` with calls, references, data flow (call/usage/reference) and cross-file modes.
 - [x] `get_architecture` summary: languages, packages, entry points and hotspots; routes and clusters remain.
-- [x] `detect_changes` from git diff to affected symbols and blast radius.
+- [x] `analyze_graph analysis=changes` from git diff to affected symbols and blast radius.
 - [x] `query_graph` exposing a safe read-only Cypher-like subset.
 - [x] `search_code` restricted to indexed files.
 - [x] Keep outputs compact, paged and token-efficient; always include `file:line`.

@@ -21,8 +21,8 @@ The database defaults to `.codegraph.sqlite` in the working directory; set
 Indexing is static: CodeGraph parses files and never executes the indexed
 project's scripts or tests. The cleanest setup is the MCP tool:
 
-1. Call `index_status`; if `stale=true`, call `index_repository` with the
-   repository path (`async=true` for large repos), then poll `index_job_status`.
+1. Call `index_repository` with `action=status`; if `stale=true`, call it with
+   `action=index` (`async=true` for large repos), then poll with `action=job`.
 2. Keep `index_repository` in the agent's session-start instructions.
 
 The auto-index helper, plugins and git hooks below are optional conveniences for
