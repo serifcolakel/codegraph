@@ -69,6 +69,7 @@ export interface IndexStore {
   ) => Effect.Effect<RepoRecord, StoreError>
   readonly getRepo: (idOrPath: string) => Effect.Effect<RepoRecord | null, StoreError>
   readonly listRepos: () => Effect.Effect<readonly RepoRecord[], StoreError>
+  readonly renameRepo: (repoId: string, name: string) => Effect.Effect<boolean, StoreError>
   readonly getFiles: (repoId: string) => Effect.Effect<Map<string, FileRecord>, StoreError>
   readonly saveFileIndex: (
     repoId: string,
@@ -188,6 +189,20 @@ export const IndexStoreLive = Layer.effect(
           ...(row.indexed_at ? { indexedAt: row.indexed_at } : {}),
           ...(row.index_duration_ms > 0 ? { indexDurationMs: row.index_duration_ms } : {})
         }
+      })
+
+    const renameRepo = (repoId: string, name: string): Effect.Effect<boolean, StoreError> =>
+      Effect.gen(function* () {
+        const existing = yield* sql<{ id: string }>`
+          SELECT id FROM repos WHERE id = ${repoId} LIMIT 1;
+        `.pipe(Effect.mapError((e) => new StoreError({ message: "Failed to find repo", cause: e })))
+        if (existing.length === 0) return false
+        yield* sql`
+          UPDATE repos SET name = ${name} WHERE id = ${repoId};
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Failed to rename repo", cause: e }))
+        )
+        return true
       })
 
     const listRepos = (): Effect.Effect<readonly RepoRecord[], StoreError> =>
@@ -1137,6 +1152,7 @@ export const IndexStoreLive = Layer.effect(
       getOrCreateRepo,
       getRepo,
       listRepos,
+      renameRepo,
       getFiles,
       saveFileIndex,
       deleteFiles,

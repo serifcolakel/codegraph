@@ -59,6 +59,22 @@ describe("HTTP API & visualization", () => {
             expect(typeof reposRes[0].indexedAt).toBe("string")
             expect(reposRes[0].indexDurationMs).toBeGreaterThanOrEqual(0)
 
+            const renamed = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/repos/${report.repoId}`, {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ name: "http-test-renamed" })
+              }).then((r) => r.json())
+            )
+            expect(renamed.name).toBe("http-test-renamed")
+            yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/repos/${report.repoId}`, {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ name: report.repoName })
+              })
+            )
+
             // 4. GET /api/coverage includes parse coverage and import diagnostics
             const coverageRes = yield* Effect.tryPromise(() =>
               fetch(

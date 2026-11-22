@@ -54,6 +54,25 @@ test.describe("CodeGraph web UI", () => {
     await expect(page.getByTestId("details-modal")).not.toBeVisible()
   })
 
+  test("renames a repository from the details dialog", async ({ page, request }) => {
+    const repos = (await (await request.get("/api/repos")).json()) as Array<{
+      id: string
+      name: string
+    }>
+    const repo = repos[0]
+    if (!repo) throw new Error("expected an indexed repository")
+
+    await page.getByTestId("details-button").click()
+    await page.getByTestId("rename-input").fill("sample-renamed")
+    await page.getByTestId("rename-button").click()
+    await expect(page.getByTestId("repo-select")).toHaveValue(repo.id)
+    await expect(page.locator("#repoSelect option:checked")).toHaveText("sample-renamed")
+
+    await request.patch(`/api/repos/${repo.id}`, { data: { name: repo.name } })
+    await page.reload()
+    await expect(page.locator("#repoSelect option:checked")).toHaveText(repo.name)
+  })
+
   test("shows analytics insights", async ({ page }) => {
     await page.getByTestId("insights-button").click()
     await expect(page.getByTestId("insights-modal")).toBeVisible()
@@ -135,6 +154,25 @@ test.describe("CodeGraph web UI", () => {
     await expect(html).toHaveAttribute("data-theme", "light")
     await page.getByTestId("theme-toggle").click()
     await expect(html).toHaveAttribute("data-theme", "dark")
+  })
+
+  test("saves, applies and deletes a view", async ({ page }) => {
+    await page.evaluate(() => localStorage.removeItem("codegraph.savedViews"))
+    await page.getByTestId("insights-button").click()
+    await page.getByTestId("insights-tab-views").click()
+    await page.getByTestId("view-name").fill("Smoke view")
+    await page.getByTestId("view-save").click()
+    await expect(page.getByTestId("saved-view")).toContainText("Smoke view")
+
+    await page.getByTestId("view-apply").click()
+    await expect(page.getByTestId("insights-modal")).not.toBeVisible()
+
+    await page.getByTestId("insights-button").click()
+    await page.getByTestId("insights-tab-views").click()
+    const saved = page.getByTestId("saved-view").filter({ hasText: "Smoke view" })
+    await saved.getByTestId("view-delete").click()
+    await expect(page.getByTestId("insights-body")).toContainText("No saved views")
+    await page.getByTestId("insights-footer-close").click()
   })
 
   test("reindexes and refreshes the metadata bar", async ({ page }) => {

@@ -372,7 +372,30 @@ export const makeHttpRouter = Effect.gen(function* () {
       })
     ),
 
-    // 4. DELETE /api/repos/:id - remove an index
+    // 4. PATCH /api/repos/:id - rename an index
+    HttpRouter.patch(
+      "/api/repos/:id",
+      Effect.gen(function* () {
+        const params = yield* HttpRouter.schemaParams(Schema.Struct({ id: Schema.String }))
+        const body = yield* HttpServerRequest.schemaBodyJson(Schema.Struct({ name: Schema.String }))
+        const name = body.name.trim()
+        if (name.length === 0) {
+          return yield* HttpServerResponse.json({ error: "Name is required." }, { status: 400 })
+        }
+        const repoId = decodeURIComponent(params.id)
+        const renamed = yield* store.renameRepo(repoId, name).pipe(Effect.either)
+        if (Either.isLeft(renamed)) {
+          return yield* HttpServerResponse.json({ error: renamed.left.message }, { status: 500 })
+        }
+        if (!renamed.right) {
+          return yield* HttpServerResponse.json({ error: "Repository not found." }, { status: 404 })
+        }
+        const repo = yield* store.getRepo(repoId)
+        return yield* HttpServerResponse.json(repo)
+      })
+    ),
+
+    // 5. DELETE /api/repos/:id - remove an index
     HttpRouter.del(
       "/api/repos/:id",
       Effect.gen(function* () {

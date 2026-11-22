@@ -323,6 +323,17 @@
         font-size: 0.75rem;
       }
 
+      .view-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .view-actions .info-btn {
+        height: 24px;
+        padding: 0 9px;
+        font-size: 0.64rem;
+      }
+
       .insight-toolbar {
         display: flex;
         align-items: flex-end;
@@ -2435,6 +2446,7 @@
         <button type="button" class="insight-tab" data-insight-tab="communities" data-testid="insights-tab-communities" role="tab" aria-selected="false">Communities</button>
         <button type="button" class="insight-tab" data-insight-tab="packages" data-testid="insights-tab-packages" role="tab" aria-selected="false">Packages</button>
         <button type="button" class="insight-tab" data-insight-tab="snapshots" data-testid="insights-tab-snapshots" role="tab" aria-selected="false">Snapshots</button>
+        <button type="button" class="insight-tab" data-insight-tab="views" data-testid="insights-tab-views" role="tab" aria-selected="false">Views</button>
         <button type="button" class="insight-tab" data-insight-tab="changes" data-testid="insights-tab-changes" role="tab" aria-selected="false">Changes</button>
       </div>
       <div class="modal-body" id="insightsBody" data-testid="insights-body"></div>
@@ -2714,6 +2726,13 @@
                 repo.indexDurationMs !== undefined ? `${repo.indexDurationMs} ms` : "—",
               ),
               detailsRow("Repo ID", repo.id),
+              `<div class="insight-toolbar" data-testid="rename-toolbar">
+                <label class="field" for="renameRepoInput">
+                  <span>Rename</span>
+                  <input id="renameRepoInput" data-testid="rename-input" value="${escapeHtml(repo.name)}" autocomplete="off" spellcheck="false" />
+                </label>
+                <button type="button" id="renameRepoBtn" class="info-btn" data-testid="rename-button">Rename</button>
+              </div>`,
             ].join(""),
           ),
           detailsSection(
@@ -2767,8 +2786,37 @@
             fetchJson("/api/jobs?limit=5"),
           ]);
           renderDetails(repo, coverage, jobs);
+          $("renameRepoBtn")?.addEventListener("click", () => {
+            renameCurrentRepo(repo.id).catch(() => {});
+          });
         } catch (error) {
           $("detailsBody").innerHTML = `<div class="details-empty">Could not load details: ${escapeHtml(error.message)}</div>`;
+        }
+      }
+
+      async function renameCurrentRepo(repoId) {
+        const input = $("renameRepoInput");
+        if (!input) return;
+        const name = input.value.trim();
+        if (!name) {
+          toast("Repository name is required.", true);
+          return;
+        }
+        try {
+          const updated = await fetchJson(`/api/repos/${encodeURIComponent(repoId)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name }),
+          });
+          state.repos = state.repos.map((repo) =>
+            repo.id === repoId ? { ...repo, name: updated.name } : repo,
+          );
+          const option = Array.from($("repoSelect").options).find(
+            (candidate) => candidate.value === repoId,
+          );
+          if (option) option.textContent = updated.name;
+          toast("Repository renamed.");
+        } catch (error) {
+          toast(`Rename failed: ${error.message}`, true);
         }
       }
 
@@ -2996,6 +3044,114 @@
         }
       }
 
+      const VIEW_STORAGE_KEY = "codegraph.savedViews";
+
+      function readSavedViews() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) || "[]");
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function writeSavedViews(views) {
+        try {
+          localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(views));
+        } catch {
+          // Storage may be unavailable; keep the in-memory list usable.
+        }
+      }
+
+      function renderViewsInsight() {
+        const views = readSavedViews().filter((view) => view.repoId === state.repoId);
+        const list = views.length
+          ? views
+              .map(
+                (view) => `
+                  <div class="insight-item" data-testid="saved-view">
+                    <span>
+                      <span class="insight-item-title">${escapeHtml(view.name)}</span><br />
+                      <span class="insight-item-meta">${escapeHtml(view.mode)} · depth ${view.depth}${view.focus ? " · focused" : ""}</span>
+                    </span>
+                    <span class="view-actions">
+                      <button type="button" class="info-btn" data-view-apply="${escapeHtml(view.id)}" data-testid="view-apply">Apply</button>
+                      <button type="button" class="info-btn" data-view-delete="${escapeHtml(view.id)}" data-testid="view-delete">Delete</button>
+                    </span>
+                  </div>`,
+              )
+              .join("")
+          : insightEmpty("No saved views for this repository yet.")
+
+        $("insightsBody").innerHTML = `
+          <div class="insight-toolbar">
+            <label class="field" for="viewName">
+              <span>Save current view</span>
+              <input id="viewName" data-testid="view-name" placeholder="My view" autocomplete="off" spellcheck="false" />
+            </label>
+            <button type="button" id="saveViewBtn" class="info-btn" data-testid="view-save">Save</button>
+          </div>
+          <div class="insight-list">${list}</div>`
+
+        $("saveViewBtn").addEventListener("click", () => {
+          const name = $("viewName").value.trim();
+          if (!name) {
+            toast("View name is required.", true);
+            return;
+          }
+          const views = readSavedViews()
+          views.push({
+            id: `view_${Date.now()}`,
+            name,
+            repoId: state.repoId,
+            mode: state.mode,
+            focus: state.focus ?? null,
+            depth: state.depth,
+            hideIsolated: state.hideIsolated,
+            hiddenKinds: Array.from(state.hiddenKinds),
+            createdAt: new Date().toISOString(),
+          })
+          writeSavedViews(views)
+          toast("View saved.")
+          renderViewsInsight()
+        })
+
+        $("insightsBody").onclick = (event) => {
+          const target = event.target.closest("[data-view-apply], [data-view-delete]")
+          if (!target) return
+          const applyId = target.getAttribute("data-view-apply")
+          const deleteId = target.getAttribute("data-view-delete")
+          const views = readSavedViews()
+          if (deleteId) {
+            writeSavedViews(views.filter((view) => view.id !== deleteId))
+            renderViewsInsight()
+            return
+          }
+          if (!applyId) return
+          const view = views.find((candidate) => candidate.id === applyId)
+          if (view) applySavedView(view)
+        }
+      }
+
+      function applySavedView(view) {
+        if (view.repoId !== state.repoId) return
+        state.depth = Number(view.depth) || 1
+        $("depthSlider").value = String(state.depth)
+        setDepthFill()
+        state.hideIsolated = Boolean(view.hideIsolated)
+        $("isolatedToggle").classList.toggle("active", state.hideIsolated)
+        $("isolatedToggle").setAttribute("aria-pressed", String(state.hideIsolated))
+        state.hiddenKinds = new Set(Array.isArray(view.hiddenKinds) ? view.hiddenKinds : [])
+        renderLegend()
+        closeInsightsModal()
+        if (view.mode === "symbols") {
+          if (view.focus) loadSymbolNeighborhood(view.focus).catch(() => {})
+          else $("viewSymbolsBtn").click()
+        } else {
+          loadFileGraph().catch(() => {})
+        }
+      }
+
       function renderSnapshotsInsight(data) {
         const deltaText = (entry) =>
           `${entry.from.toLocaleString("en-US")} → ${entry.to.toLocaleString("en-US")} (${entry.delta >= 0 ? "+" : ""}${entry.delta.toLocaleString("en-US")})`;
@@ -3021,6 +3177,11 @@
         const body = $("insightsBody");
         if (!state.repoId) {
           body.innerHTML = insightEmpty("Select a repository first.");
+          return;
+        }
+
+        if (tab === "views") {
+          renderViewsInsight();
           return;
         }
 
