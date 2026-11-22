@@ -39,9 +39,9 @@ Implemented and verified:
   - Search with keyboard navigation, symbol panel with docs, callers and callees.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 10 tools: `repo_map`, `outline_file`, `search_symbol`, `find_references`,
-  `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
-  `read_file_range`.
+- MCP server with 12 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
+  `list_projects`, `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
+  `get_code_snippet`, `search_code`, `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -86,9 +86,9 @@ tests cover one representative construct per language.
 Make the MCP server useful for real repository investigations.
 
 - [ ] `index_repository` (index a path into the current database).
-- [ ] `list_projects` and `delete_project`.
+- [x] `list_projects`; `delete_project` remains.
 - [x] `index_status` and coverage diagnostics.
-- [ ] `search_graph` with name regex, kind filters, file scope, degree filters and paging.
+- [x] `search_graph` with name regex, kind filters, file scope, degree filters and paging.
 - [x] `get_graph_schema` describing node labels, edge kinds and properties.
 - [x] `get_file_outline` (exposed as `outline_file`).
 - [x] `get_code_snippet` by qualified name.
