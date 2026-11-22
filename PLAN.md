@@ -29,6 +29,8 @@ Implemented and verified:
   and `pyproject.toml`.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command,
   `index_status` MCP tool).
+- Analytics service: PageRank/in-degree, hotspots, dead-code candidates and
+  symbol/file cycle detection via `analyze_graph`.
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
 - Graph queries: search, symbol details, references, outline, neighborhood, repo map, file graph.
 - HTTP API with indexing actions:
@@ -43,10 +45,11 @@ Implemented and verified:
   - Index details dialog with languages, coverage, imports and recent jobs.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 19 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
-  `query_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
-  `index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
-  `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `read_file_range`.
+- MCP server with 20 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
+  `query_graph`, `analyze_graph`, `get_architecture`, `trace_path`, `detect_changes`,
+  `index_repository`, `index_job_status`, `delete_project`, `list_projects`,
+  `find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
+  `get_code_snippet`, `search_code`, `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -107,13 +110,13 @@ Make the MCP server useful for real repository investigations.
 
 ### Phase 3 — Analytics and impact (P1)
 
-- [ ] PageRank / in-degree ranking per repository and per package.
+- [x] PageRank / in-degree ranking per repository (package-level ranking remains).
 - [ ] Community detection over call/import edges to surface de facto modules.
-- [ ] Cycle detection for files, packages and call graphs.
-- [ ] Dead-code candidates: no indexed callers, excluding entry points and exports.
-- [ ] Hotspot ranking from fan-in, fan-out and complexity signals.
+- [x] Cycle detection for files and call graphs; package cycles remain.
+- [x] Dead-code candidates: no indexed callers, excluding entry points and exports.
+- [x] Hotspot ranking from fan-in and fan-out (complexity signals remain).
 - [ ] Complexity fields: cyclomatic, cognitive, loop depth, allocation/scan-in-loop signals.
-- [ ] Git-aware change impact: changed files → symbols → reverse dependencies → tests.
+- [x] Git-aware change impact: changed files → symbols → reverse dependencies.
 - [ ] Snapshot comparison between two index runs.
 - [ ] UI views for architecture, hotspots, dead code and change impact.
 

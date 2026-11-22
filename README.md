@@ -18,6 +18,8 @@ MCP server.
   type-only imports stay visible.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
+- Graph analytics: PageRank/in-degree ranking, hotspots, dead-code candidates
+  and symbol/file cycle detection (`analyze_graph` MCP tool).
 - Documentation indexing: JSDoc, `///` / `/** */` block docs and Python
   docstrings are stored with symbols and included in full-text search.
 - Module-aware cross-file edge resolution using relative paths and workspace
@@ -121,8 +123,8 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
 `index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
-`index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `query_graph`, and
-`read_file_range`.
+`index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `query_graph`,
+`analyze_graph`, and `read_file_range`.
 
 `query_graph` accepts a safe, read-only Cypher subset:
 
