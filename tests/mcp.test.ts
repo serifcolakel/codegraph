@@ -101,6 +101,7 @@ export function top(): string {
         expect(toolNames).toContain("search_code")
         expect(toolNames).toContain("list_projects")
         expect(toolNames).toContain("index_repository")
+        expect(toolNames).toContain("delete_project")
         expect(toolNames).toContain("search_graph")
         expect(toolNames).toContain("get_architecture")
         expect(toolNames).toContain("trace_path")
@@ -234,6 +235,12 @@ export function top(): string {
         })
         expect(readRangeResult.content[0]?.text).toContain("1 |")
         expect(readRangeResult.content[0]?.text).toContain("DataService")
+
+        // 16. Test delete_project
+        const deleteResult = yield* callTool("delete_project", { repoId: report.repoId })
+        expect(deleteResult.content[0]?.text).toContain("Deleted index")
+        const projectsAfterDelete = yield* callTool("list_projects", {})
+        expect(projectsAfterDelete.content[0]?.text).toContain("No repositories indexed")
       } finally {
         yield* fs.remove(tmpDir, { recursive: true }).pipe(Effect.ignore)
       }

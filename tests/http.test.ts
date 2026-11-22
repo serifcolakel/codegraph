@@ -53,7 +53,27 @@ describe("HTTP API & visualization", () => {
             expect(typeof reposRes[0].indexedAt).toBe("string")
             expect(reposRes[0].indexDurationMs).toBeGreaterThanOrEqual(0)
 
-            // 4. Test GET /api/graph?repo=&level=file
+            // 4. GET /api/coverage includes parse coverage and import diagnostics
+            const coverageRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/coverage?repo=${encodeURIComponent(report.repoId)}`
+              ).then((r) => r.json())
+            )
+            expect(coverageRes.repoId).toBe(report.repoId)
+            expect(coverageRes.coverage.parsed).toBe(1)
+            expect(coverageRes.imports.total).toBe(0)
+
+            // 5. GET /api/architecture summarizes languages and packages
+            const architectureRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/architecture?repo=${encodeURIComponent(report.repoId)}`
+              ).then((r) => r.json())
+            )
+            expect(architectureRes.languages.typescript).toBe(1)
+            expect(Array.isArray(architectureRes.packages)).toBe(true)
+            expect(Array.isArray(architectureRes.hotspots)).toBe(true)
+
+            // 6. Test GET /api/graph?repo=&level=file
             const graphRes = yield* Effect.tryPromise(() =>
               fetch(
                 `http://127.0.0.1:${TEST_PORT}/api/graph?repo=${encodeURIComponent(report.repoId)}&level=file`
@@ -62,7 +82,7 @@ describe("HTTP API & visualization", () => {
             expect(graphRes.nodes).toBeDefined()
             expect(graphRes.nodes.length).toBe(1)
 
-            // 5. Test GET /api/search?q=greet
+            // 7. Test GET /api/search?q=greet
             const searchRes = yield* Effect.tryPromise(() =>
               fetch(`http://127.0.0.1:${TEST_PORT}/api/search?q=greet`).then((r) => r.json())
             )
@@ -70,14 +90,14 @@ describe("HTTP API & visualization", () => {
             expect(searchRes.length).toBeGreaterThan(0)
             expect(searchRes[0].name).toBe("greet")
 
-            // 6. Test GET / - HTML serving
+            // 8. Test GET / - HTML serving
             const htmlRes = yield* Effect.tryPromise(() =>
               fetch(`http://127.0.0.1:${TEST_PORT}/`).then((r) => r.text())
             )
             expect(htmlRes).toContain("CodeGraph")
             expect(htmlRes).toContain("cytoscape")
 
-            // 7. POST /api/reindex refreshes an existing repository
+            // 9. POST /api/reindex refreshes an existing repository
             const reindexRes = yield* Effect.tryPromise(() =>
               fetch(`http://127.0.0.1:${TEST_PORT}/api/reindex`, {
                 method: "POST",
@@ -88,7 +108,7 @@ describe("HTTP API & visualization", () => {
             expect(reindexRes.filesIndexed).toBe(0)
             expect(reindexRes.filesSkipped).toBe(1)
 
-            // 8. POST /api/index indexes a new folder from the web UI/API
+            // 10. POST /api/index indexes a new folder from the web UI/API
             const secondDir = path.join(tmpDir, "second-repo")
             yield* fs.makeDirectory(secondDir, { recursive: true })
             yield* fs.writeFileString(path.join(secondDir, "other.ts"), `export const answer = 42;`)
@@ -107,7 +127,7 @@ describe("HTTP API & visualization", () => {
             )
             expect(reposAfter.length).toBe(2)
 
-            // 9. DELETE /api/repos/:id removes an index without touching files
+            // 11. DELETE /api/repos/:id removes an index without touching files
             const secondRepo = reposAfter.find(
               (repo: { name: string }) => repo.name === "second-repo"
             )

@@ -75,6 +75,11 @@ export type CodeSnippetInput = typeof CodeSnippetInput.Type
 export const ListProjectsInput = Schema.Struct({})
 export type ListProjectsInput = typeof ListProjectsInput.Type
 
+export const DeleteProjectInput = Schema.Struct({
+  repoId: Schema.String
+})
+export type DeleteProjectInput = typeof DeleteProjectInput.Type
+
 export const IndexRepositoryInput = Schema.Struct({
   path: Schema.String,
   name: Schema.optional(Schema.String),
@@ -224,6 +229,17 @@ export const createMcpServer = <R>(
             properties: {
               repoId: { type: "string", description: "Optional repo ID" }
             }
+          }
+        },
+        {
+          name: "delete_project",
+          description: "Deletes an indexed repository and its symbols, edges and import records.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              repoId: { type: "string", description: "Repository ID to delete" }
+            },
+            required: ["repoId"]
           }
         },
         {
@@ -555,6 +571,26 @@ export const createMcpServer = <R>(
             })
           )
           return { content: [{ type: "text", text }] }
+        }
+
+        case "delete_project": {
+          const args = Schema.decodeUnknownSync(DeleteProjectInput)(rawArgs ?? {})
+          const deleted = await runtime.runPromise(
+            Effect.gen(function* () {
+              const store = yield* IndexStore
+              return yield* store.deleteRepo(args.repoId)
+            })
+          )
+          return {
+            content: [
+              {
+                type: "text",
+                text: deleted
+                  ? `Deleted index ${args.repoId}.`
+                  : `Repository not found: ${args.repoId}.`
+              }
+            ]
+          }
         }
 
         case "index_repository": {

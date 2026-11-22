@@ -73,7 +73,87 @@ export const makeHttpRouter = Effect.gen(function* () {
       })
     ),
 
-    // 2. DELETE /api/repos/:id - remove an index
+    // 2. GET /api/coverage?repo= - parse coverage and unresolved diagnostics
+    HttpRouter.get(
+      "/api/coverage",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const repoId = url.searchParams.get("repo")
+
+        if (repoId) {
+          const repo = yield* store.getRepo(repoId)
+          if (!repo) {
+            return yield* HttpServerResponse.json(
+              { error: "Repository not found." },
+              { status: 404 }
+            )
+          }
+          const [stats, coverage, imports] = yield* Effect.all(
+            [store.getStats(repo.id), store.getCoverage(repo.id), store.getImportSummary(repo.id)],
+            { concurrency: 1 }
+          )
+          return yield* HttpServerResponse.json({
+            repoId: repo.id,
+            name: repo.name,
+            indexedAt: repo.indexedAt ?? null,
+            indexDurationMs: repo.indexDurationMs ?? null,
+            stats,
+            coverage,
+            imports
+          })
+        }
+
+        const reposResult = yield* store.listRepos().pipe(Effect.either)
+        if (Either.isLeft(reposResult)) {
+          return yield* HttpServerResponse.json(
+            { error: reposResult.left.message },
+            { status: 500 }
+          )
+        }
+
+        const statuses = []
+        for (const repo of reposResult.right) {
+          const [stats, coverage, imports] = yield* Effect.all(
+            [store.getStats(repo.id), store.getCoverage(repo.id), store.getImportSummary(repo.id)],
+            { concurrency: 1 }
+          )
+          statuses.push({
+            repoId: repo.id,
+            name: repo.name,
+            indexedAt: repo.indexedAt ?? null,
+            indexDurationMs: repo.indexDurationMs ?? null,
+            stats,
+            coverage,
+            imports
+          })
+        }
+        return yield* HttpServerResponse.json(statuses)
+      })
+    ),
+
+    // 3. GET /api/architecture?repo= - languages, packages, entry points, hotspots
+    HttpRouter.get(
+      "/api/architecture",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const repoId = url.searchParams.get("repo")
+        if (!repoId) {
+          return yield* HttpServerResponse.json(
+            { error: "Query parameter 'repo' is required." },
+            { status: 400 }
+          )
+        }
+        const result = yield* query.architecture(repoId).pipe(Effect.either)
+        if (Either.isLeft(result)) {
+          return yield* HttpServerResponse.json({ error: result.left.message }, { status: 500 })
+        }
+        return yield* HttpServerResponse.json(result.right)
+      })
+    ),
+
+    // 4. DELETE /api/repos/:id - remove an index
     HttpRouter.del(
       "/api/repos/:id",
       Effect.gen(function* () {
