@@ -9,3 +9,7 @@ dist
 
 
 .playwright-mcp/
+test-results/
+playwright-report/
+blob-report/
+e2e/.tmp/

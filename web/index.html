@@ -1551,7 +1551,7 @@
         <div class="toolbar">
           <button
             type="button"
-            id="backBtn"
+            id="backBtn" data-testid="back-button"
             class="icon-btn"
             title="Go back"
             aria-label="Go back"
@@ -1571,12 +1571,12 @@
 
           <div class="control">
             <span class="control-label">Repo</span>
-            <select id="repoSelect" aria-label="Repository"></select>
+            <select id="repoSelect" data-testid="repo-select" aria-label="Repository"></select>
           </div>
 
           <button
             type="button"
-            id="indexBtn"
+            id="indexBtn" data-testid="index-button"
             class="icon-btn accent"
             title="Index a repository"
             aria-label="Index a repository"
@@ -1598,7 +1598,7 @@
 
           <button
             type="button"
-            id="updateRepoBtn"
+            id="updateRepoBtn" data-testid="reindex-button"
             class="icon-btn"
             title="Re-index current repository"
             aria-label="Re-index current repository"
@@ -1618,7 +1618,7 @@
 
           <button
             type="button"
-            id="deleteRepoBtn"
+            id="deleteRepoBtn" data-testid="delete-button"
             class="icon-btn danger"
             title="Delete index"
             aria-label="Delete index"
@@ -1641,7 +1641,7 @@
           <div class="segmented" role="tablist" aria-label="Graph level">
             <button
               type="button"
-              id="viewFileBtn"
+              id="viewFileBtn" data-testid="view-files"
               class="active"
               role="tab"
               aria-selected="true"
@@ -1650,7 +1650,7 @@
             </button>
             <button
               type="button"
-              id="viewSymbolsBtn"
+              id="viewSymbolsBtn" data-testid="view-symbols"
               role="tab"
               aria-selected="false"
             >
@@ -1660,7 +1660,7 @@
 
           <button
             type="button"
-            id="isolatedToggle"
+            id="isolatedToggle" data-testid="connected-toggle"
             class="chip-toggle active"
             aria-pressed="true"
             title="Hide files with no cross-file edges"
@@ -1686,7 +1686,7 @@
             </span>
             <input
               type="text"
-              id="searchInput"
+              id="searchInput" data-testid="search-input"
               placeholder="Search symbols…"
               autocomplete="off"
               spellcheck="false"
@@ -1697,7 +1697,7 @@
             />
             <span class="kbd">⌘K</span>
             <div
-              id="searchDropdown"
+              id="searchDropdown" data-testid="search-dropdown"
               class="search-dropdown"
               role="listbox"
             ></div>
@@ -1738,7 +1738,7 @@
 
           <button
             type="button"
-            id="themeToggleBtn"
+            id="themeToggleBtn" data-testid="theme-toggle"
             class="icon-btn"
             title="Toggle theme"
             aria-label="Toggle theme"
@@ -1774,39 +1774,39 @@
 
       <main class="workspace">
         <section class="graph-panel" aria-label="Graph">
-          <div id="cy"></div>
+          <div id="cy" data-testid="graph-canvas"></div>
 
           <div class="graph-topbar">
             <div class="graph-badge">
               <span class="live-dot"></span>
-              <span id="viewModeLabel">File graph</span>
+              <span id="viewModeLabel" data-testid="view-mode">File graph</span>
             </div>
             <div class="stats" aria-live="polite">
               <div class="stat" title="Last index time">
-                <span class="stat-value" id="statIndexed">—</span>
+                <span class="stat-value" id="statIndexed" data-testid="stat-indexed">—</span>
                 <span class="stat-label">Indexed</span>
               </div>
               <div class="stat" title="Indexed source size">
-                <span class="stat-value" id="statSource">—</span>
+                <span class="stat-value" id="statSource" data-testid="stat-source">—</span>
                 <span class="stat-label">Source</span>
               </div>
               <div class="stat" title="Searchable symbols">
-                <span class="stat-value" id="statSymbols">0</span>
+                <span class="stat-value" id="statSymbols" data-testid="stat-symbols">0</span>
                 <span class="stat-label">Symbols</span>
               </div>
               <div class="stat">
-                <span class="stat-value" id="statNodes">0</span>
+                <span class="stat-value" id="statNodes" data-testid="stat-nodes">0</span>
                 <span class="stat-label">Nodes</span>
               </div>
               <div class="stat">
-                <span class="stat-value" id="statEdges">0</span>
+                <span class="stat-value" id="statEdges" data-testid="stat-edges">0</span>
                 <span class="stat-label">Edges</span>
               </div>
             </div>
           </div>
 
           <div
-            id="loadingOverlay"
+            id="loadingOverlay" data-testid="loading-overlay"
             class="loading-overlay"
             role="status"
             aria-live="polite"
@@ -1821,7 +1821,7 @@
         </section>
 
         <aside class="side-panel" aria-label="Symbol details">
-          <div id="panelEmpty" class="empty-state">
+          <div id="panelEmpty" data-testid="panel-empty" class="empty-state">
             <div class="empty-icon" aria-hidden="true">
               <svg
                 aria-hidden="true"
@@ -1843,11 +1843,11 @@
             </div>
           </div>
 
-          <div id="panelContent" class="panel-content" hidden>
+          <div id="panelContent" data-testid="symbol-panel" class="panel-content" hidden>
             <div class="panel-header">
               <div class="panel-heading">
                 <span id="panelBadge" class="badge">kind</span>
-                <h2 id="panelTitle" class="panel-title">Symbol name</h2>
+                <h2 id="panelTitle" data-testid="panel-title" class="panel-title">Symbol name</h2>
                 <div id="panelLocation" class="panel-location"></div>
               </div>
               <button
@@ -1897,7 +1897,7 @@
             </div>
 
             <div id="panelFooter" class="panel-footer">
-              <span id="repoPath">—</span>
+              <span id="repoPath" data-testid="repo-path">—</span>
               <span>click an edge to jump</span>
             </div>
           </div>
@@ -1905,7 +1905,7 @@
       </main>
     </div>
 
-    <dialog id="indexModal" class="modal" aria-labelledby="indexModalTitle">
+    <dialog id="indexModal" data-testid="index-modal" class="modal" aria-labelledby="indexModalTitle">
       <form id="indexForm">
         <div class="modal-header">
           <div>
@@ -1938,7 +1938,7 @@
           <label class="field" for="indexPath">
             <span>Repository path</span>
             <input
-              id="indexPath"
+              id="indexPath" data-testid="index-path"
               name="path"
               required
               autocomplete="off"
@@ -1950,7 +1950,7 @@
           <label class="field" for="indexName">
             <span>Display name (optional)</span>
             <input
-              id="indexName"
+              id="indexName" data-testid="index-name"
               name="name"
               autocomplete="off"
               placeholder="my-repo"
@@ -1958,25 +1958,25 @@
           </label>
 
           <label class="check-row" for="indexForce">
-            <input type="checkbox" id="indexForce" name="force" />
+            <input type="checkbox" id="indexForce" data-testid="index-force" name="force" />
             <span>Force a full re-index</span>
           </label>
 
-          <p id="indexError" class="modal-error" hidden></p>
+          <p id="indexError" data-testid="index-error" class="modal-error" hidden></p>
         </div>
 
         <div class="modal-footer">
-          <button type="button" id="indexCancelBtn" class="ghost-btn">
+          <button type="button" id="indexCancelBtn" data-testid="index-cancel" class="ghost-btn">
             Cancel
           </button>
-          <button type="submit" id="indexSubmitBtn" class="primary-btn">
+          <button type="submit" id="indexSubmitBtn" data-testid="index-submit" class="primary-btn">
             Index
           </button>
         </div>
       </form>
     </dialog>
 
-    <dialog id="deleteModal" class="modal" aria-labelledby="deleteModalTitle">
+    <dialog id="deleteModal" data-testid="delete-modal" class="modal" aria-labelledby="deleteModalTitle">
       <div class="modal-header">
         <div>
           <div id="deleteModalTitle" class="modal-title">Delete index</div>
@@ -2013,13 +2013,13 @@
       </div>
 
       <div class="modal-footer">
-        <button type="button" id="deleteCancelBtn" class="ghost-btn">Cancel</button>
-        <button type="button" id="deleteConfirmBtn" class="danger-btn">Delete index</button>
+        <button type="button" id="deleteCancelBtn" data-testid="delete-cancel" class="ghost-btn">Cancel</button>
+        <button type="button" id="deleteConfirmBtn" data-testid="delete-confirm" class="danger-btn">Delete index</button>
       </div>
     </dialog>
 
     <div
-      id="toast"
+      id="toast" data-testid="toast"
       class="toast"
       role="status"
       aria-live="polite"
@@ -3089,6 +3089,7 @@
           button.type = "button";
           button.className = "search-item";
           button.setAttribute("role", "option");
+          button.setAttribute("data-testid", "search-result");
 
           const title = document.createElement("span");
           title.className = "search-item-title";
