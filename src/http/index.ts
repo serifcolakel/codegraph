@@ -82,7 +82,59 @@ export const makeHttpRouter = Effect.gen(function* () {
       })
     ),
 
-    // 2. GET /api/analytics?repo=&analysis=&level=&limit=
+    // 2. GET /api/snapshots?repo=&limit=
+    HttpRouter.get(
+      "/api/snapshots",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const repoId = url.searchParams.get("repo")
+        if (!repoId) {
+          return yield* HttpServerResponse.json(
+            { error: "Query parameter 'repo' is required." },
+            { status: 400 }
+          )
+        }
+        const parsedLimit = parseInt(url.searchParams.get("limit") ?? "20", 10)
+        const limit = Number.isFinite(parsedLimit) ? parsedLimit : 20
+        const result = yield* store.listSnapshots(repoId, limit).pipe(Effect.either)
+        if (Either.isLeft(result)) {
+          return yield* HttpServerResponse.json({ error: result.left.message }, { status: 500 })
+        }
+        return yield* HttpServerResponse.json(result.right)
+      })
+    ),
+
+    // 3. GET /api/snapshots/compare?repo=&from=&to=
+    HttpRouter.get(
+      "/api/snapshots/compare",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const repoId = url.searchParams.get("repo")
+        if (!repoId) {
+          return yield* HttpServerResponse.json(
+            { error: "Query parameter 'repo' is required." },
+            { status: 400 }
+          )
+        }
+        const from = url.searchParams.get("from") ?? undefined
+        const to = url.searchParams.get("to") ?? undefined
+        const result = yield* store.compareSnapshots(repoId, from, to).pipe(Effect.either)
+        if (Either.isLeft(result)) {
+          return yield* HttpServerResponse.json({ error: result.left.message }, { status: 500 })
+        }
+        if (!result.right) {
+          return yield* HttpServerResponse.json(
+            { error: "At least two snapshots are required." },
+            { status: 404 }
+          )
+        }
+        return yield* HttpServerResponse.json(result.right)
+      })
+    ),
+
+    // 4. GET /api/analytics?repo=&analysis=&level=&limit=
     HttpRouter.get(
       "/api/analytics",
       Effect.gen(function* () {

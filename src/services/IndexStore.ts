@@ -28,6 +28,38 @@ export interface StoredRawEdge {
   readonly importPath?: string
 }
 
+export interface IndexSnapshot {
+  readonly id: string
+  readonly repoId: string
+  readonly createdAt: string
+  readonly files: number
+  readonly symbols: number
+  readonly edges: number
+  readonly sourceBytes: number
+  readonly languages: Readonly<Record<string, number>>
+  readonly symbolKinds: Readonly<Record<string, number>>
+  readonly edgeKinds: Readonly<Record<string, number>>
+  readonly coverage: ParseCoverage
+}
+
+export interface SnapshotMetricDelta {
+  readonly name: string
+  readonly from: number
+  readonly to: number
+  readonly delta: number
+}
+
+export interface SnapshotComparison {
+  readonly repoId: string
+  readonly from: IndexSnapshot
+  readonly to: IndexSnapshot
+  readonly totals: readonly SnapshotMetricDelta[]
+  readonly languages: readonly SnapshotMetricDelta[]
+  readonly symbolKinds: readonly SnapshotMetricDelta[]
+  readonly edgeKinds: readonly SnapshotMetricDelta[]
+  readonly coverage: readonly SnapshotMetricDelta[]
+}
+
 export interface IndexStore {
   readonly initSchema: () => Effect.Effect<void, StoreError>
   readonly getOrCreateRepo: (
@@ -67,6 +99,21 @@ export interface IndexStore {
     { readonly total: number; readonly resolved: number; readonly unresolved: number },
     StoreError
   >
+  readonly saveSnapshot: (
+    repoId: string,
+    createdAt: string,
+    stats: StatsReport,
+    coverage: ParseCoverage
+  ) => Effect.Effect<void, StoreError>
+  readonly listSnapshots: (
+    repoId: string,
+    limit?: number
+  ) => Effect.Effect<readonly IndexSnapshot[], StoreError>
+  readonly compareSnapshots: (
+    repoId: string,
+    fromId?: string,
+    toId?: string
+  ) => Effect.Effect<SnapshotComparison | null, StoreError>
 }
 
 export const IndexStore = Context.GenericTag<IndexStore>("@codegraph/IndexStore")
@@ -675,6 +722,182 @@ export const IndexStoreLive = Layer.effect(
         }
       })
 
+    const snapshotFromRow = (row: {
+      id: string
+      repo_id: string
+      created_at: string
+      files: number
+      symbols: number
+      edges: number
+      source_bytes: number
+      languages_json: string
+      symbol_kinds_json: string
+      edge_kinds_json: string
+      coverage_json: string
+    }): IndexSnapshot => {
+      const parse = <T>(value: string, fallback: T): T => {
+        try {
+          return JSON.parse(value) as T
+        } catch {
+          return fallback
+        }
+      }
+      return {
+        id: row.id,
+        repoId: row.repo_id,
+        createdAt: row.created_at,
+        files: row.files,
+        symbols: row.symbols,
+        edges: row.edges,
+        sourceBytes: row.source_bytes,
+        languages: parse<Record<string, number>>(row.languages_json, {}),
+        symbolKinds: parse<Record<string, number>>(row.symbol_kinds_json, {}),
+        edgeKinds: parse<Record<string, number>>(row.edge_kinds_json, {}),
+        coverage: parse<ParseCoverage>(row.coverage_json, {
+          parsed: 0,
+          partial: 0,
+          skipped: 0,
+          unsupported: 0,
+          unknown: 0,
+          languages: {}
+        })
+      }
+    }
+
+    const listSnapshots = (
+      repoId: string,
+      limit: number = 20
+    ): Effect.Effect<readonly IndexSnapshot[], StoreError> =>
+      Effect.gen(function* () {
+        const rows = yield* sql<{
+          id: string
+          repo_id: string
+          created_at: string
+          files: number
+          symbols: number
+          edges: number
+          source_bytes: number
+          languages_json: string
+          symbol_kinds_json: string
+          edge_kinds_json: string
+          coverage_json: string
+        }>`
+          SELECT id, repo_id, created_at, files, symbols, edges, source_bytes,
+                 languages_json, symbol_kinds_json, edge_kinds_json, coverage_json
+          FROM index_snapshots
+          WHERE repo_id = ${repoId}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${Math.max(1, Math.min(100, limit))};
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Failed to list snapshots", cause: e }))
+        )
+        return rows.map(snapshotFromRow)
+      })
+
+    const saveSnapshot = (
+      repoId: string,
+      createdAt: string,
+      stats: StatsReport,
+      coverage: ParseCoverage
+    ): Effect.Effect<void, StoreError> =>
+      Effect.gen(function* () {
+        const symbolKinds = yield* sql<{ kind: string; count: number }>`
+          SELECT s.kind, COUNT(*) as count
+          FROM symbols s JOIN files f ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId}
+          GROUP BY s.kind;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to count symbol kinds", cause: e })
+          )
+        )
+        const edgeKinds = yield* sql<{ kind: string; count: number }>`
+          SELECT e.kind, COUNT(*) as count
+          FROM edges e
+          JOIN symbols s ON e.src_symbol_id = s.id
+          JOIN files f ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId}
+          GROUP BY e.kind;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to count edge kinds", cause: e })
+          )
+        )
+
+        const symbolKindMap: Record<string, number> = {}
+        for (const row of symbolKinds) symbolKindMap[row.kind] = row.count
+        const edgeKindMap: Record<string, number> = {}
+        for (const row of edgeKinds) edgeKindMap[row.kind] = row.count
+
+        const id = `snap_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+        yield* sql`
+          INSERT INTO index_snapshots (
+            id, repo_id, created_at, files, symbols, edges, source_bytes,
+            languages_json, symbol_kinds_json, edge_kinds_json, coverage_json
+          )
+          VALUES (
+            ${id}, ${repoId}, ${createdAt}, ${stats.files}, ${stats.symbols}, ${stats.edges},
+            ${stats.sourceBytes}, ${JSON.stringify(coverage.languages)},
+            ${JSON.stringify(symbolKindMap)}, ${JSON.stringify(edgeKindMap)},
+            ${JSON.stringify(coverage)}
+          );
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Failed to save snapshot", cause: e }))
+        )
+      })
+
+    const compareSnapshots = (
+      repoId: string,
+      fromId?: string,
+      toId?: string
+    ): Effect.Effect<SnapshotComparison | null, StoreError> =>
+      Effect.gen(function* () {
+        const snapshots = yield* listSnapshots(repoId, 50)
+        const to = toId ? snapshots.find((s) => s.id === toId) : snapshots[0]
+        const from = fromId ? snapshots.find((s) => s.id === fromId) : snapshots[1]
+        if (!from || !to || from.id === to.id) return null
+
+        const delta = (name: string, previous: number, current: number): SnapshotMetricDelta => ({
+          name,
+          from: previous,
+          to: current,
+          delta: current - previous
+        })
+
+        const mapDelta = (
+          previous: Readonly<Record<string, number>>,
+          current: Readonly<Record<string, number>>
+        ): readonly SnapshotMetricDelta[] => {
+          const keys = new Set([...Object.keys(previous), ...Object.keys(current)])
+          return Array.from(keys)
+            .map((key) => delta(key, previous[key] ?? 0, current[key] ?? 0))
+            .filter((entry) => entry.delta !== 0)
+            .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.name.localeCompare(b.name))
+        }
+
+        return {
+          repoId,
+          from,
+          to,
+          totals: [
+            delta("files", from.files, to.files),
+            delta("symbols", from.symbols, to.symbols),
+            delta("edges", from.edges, to.edges),
+            delta("sourceBytes", from.sourceBytes, to.sourceBytes)
+          ],
+          languages: mapDelta(from.languages, to.languages),
+          symbolKinds: mapDelta(from.symbolKinds, to.symbolKinds),
+          edgeKinds: mapDelta(from.edgeKinds, to.edgeKinds),
+          coverage: [
+            delta("parsed", from.coverage.parsed, to.coverage.parsed),
+            delta("partial", from.coverage.partial, to.coverage.partial),
+            delta("skipped", from.coverage.skipped, to.coverage.skipped),
+            delta("unsupported", from.coverage.unsupported, to.coverage.unsupported),
+            delta("unknown", from.coverage.unknown, to.coverage.unknown)
+          ].filter((entry) => entry.delta !== 0)
+        }
+      })
+
     const getImportSummary = (
       repoId: string
     ): Effect.Effect<
@@ -798,7 +1021,10 @@ export const IndexStoreLive = Layer.effect(
       getStats,
       getCoverage,
       getImportSummary,
-      markRepoIndexed
+      markRepoIndexed,
+      saveSnapshot,
+      listSnapshots,
+      compareSnapshots
     }
   })
 )

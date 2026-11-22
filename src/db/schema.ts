@@ -246,6 +246,35 @@ export const initSchema = Effect.gen(function* () {
     )
   )
 
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS index_snapshots (
+      id TEXT PRIMARY KEY,
+      repo_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      files INTEGER NOT NULL,
+      symbols INTEGER NOT NULL,
+      edges INTEGER NOT NULL,
+      source_bytes INTEGER NOT NULL,
+      languages_json TEXT NOT NULL,
+      symbol_kinds_json TEXT NOT NULL,
+      edge_kinds_json TEXT NOT NULL,
+      coverage_json TEXT NOT NULL,
+      FOREIGN KEY(repo_id) REFERENCES repos(id) ON DELETE CASCADE
+    );
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create index_snapshots table", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_index_snapshots_repo ON index_snapshots(repo_id, created_at);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_index_snapshots_repo", cause: e })
+    )
+  )
+
   const ftsTables = yield* sql<{ name: string }>`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_fts';
   `.pipe(

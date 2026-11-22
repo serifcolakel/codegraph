@@ -143,6 +143,9 @@ export const IndexerLive = Layer.effect(
         const coverage = yield* store
           .getCoverage(repo.id)
           .pipe(Effect.withSpan("IndexStore.getCoverage"))
+        yield* store
+          .saveSnapshot(repo.id, indexedAt, stats, coverage)
+          .pipe(Effect.withSpan("IndexStore.saveSnapshot"))
 
         yield* Effect.logInfo(
           `Indexing completed in ${durationMs}ms: ${stats.files} files, ${stats.symbols} symbols, ${stats.edges} edges (resolved ${resolvedEdgesCount} inter-file edges)`

@@ -140,6 +140,24 @@ test.describe("CodeGraph web UI", () => {
     await expect(page.getByTestId("stat-indexed")).toHaveText(/just now|\d+s ago/)
   })
 
+  test("compares index snapshots", async ({ page }) => {
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (candidate) =>
+          candidate.url().includes("/api/reindex") && candidate.request().method() === "POST"
+      ),
+      page.getByTestId("reindex-button").click()
+    ])
+    expect(response.ok()).toBeTruthy()
+
+    await page.getByTestId("insights-button").click()
+    await page.getByTestId("insights-tab-snapshots").click()
+    await expect(page.getByTestId("insights-body")).toContainText("Snapshots")
+    await expect(page.getByTestId("insights-body")).toContainText("→")
+    await expect(page.getByTestId("insights-body")).toContainText("files")
+    await page.getByTestId("insights-footer-close").click()
+  })
+
   test("opens and cancels the index and delete dialogs", async ({ page }) => {
     await page.getByTestId("index-button").click()
     await expect(page.getByTestId("index-modal")).toBeVisible()

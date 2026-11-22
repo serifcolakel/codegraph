@@ -244,7 +244,14 @@ function unusedHelper(): number {
         })
         expect(communities.content[0]?.text).toContain("analysis=communities")
 
-        // 13. Test query_graph
+        // 13. Test compare_snapshots
+        const snapshotComparison = yield* callTool("compare_snapshots", {
+          repoId: report.repoId
+        })
+        expect(snapshotComparison.content[0]?.text).toContain("snapshots")
+        expect(snapshotComparison.content[0]?.text).toContain("files:")
+
+        // 14. Test query_graph
         const queryGraphResult = yield* callTool("query_graph", {
           query: `MATCH (s:Symbol) WHERE s.name CONTAINS "Data" RETURN s.name AS name, s.filePath AS file ORDER BY s.name LIMIT 5`,
           repoId: report.repoId
@@ -252,7 +259,7 @@ function unusedHelper(): number {
         expect(queryGraphResult.content[0]?.text).toContain("columns: name, file")
         expect(queryGraphResult.content[0]?.text).toContain("MemoryDataService")
 
-        // 14. Test search_graph with regex, kind filter and paging
+        // 15. Test search_graph with regex, kind filter and paging
         const graphSearch = yield* callTool("search_graph", {
           namePattern: "Memory.*",
           regex: true,
@@ -271,12 +278,12 @@ function unusedHelper(): number {
         })
         expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
 
-        // 15. Test get_graph_schema
+        // 16. Test get_graph_schema
         const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
-        // 16. Test get_code_snippet by qualified name
+        // 17. Test get_code_snippet by qualified name
         const snippetResult = yield* callTool("get_code_snippet", {
           qualifiedName: "service.MemoryDataService",
           repoId: report.repoId
@@ -291,14 +298,14 @@ function unusedHelper(): number {
         })
         expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
 
-        // 17. Test search_code
+        // 18. Test search_code
         const searchCodeResult = yield* callTool("search_code", {
           query: "MemoryDataService",
           repoId: report.repoId
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 18. Test read_file_range
+        // 19. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
@@ -308,7 +315,7 @@ function unusedHelper(): number {
         expect(readRangeResult.content[0]?.text).toContain("1 |")
         expect(readRangeResult.content[0]?.text).toContain("DataService")
 
-        // 19. Test delete_project
+        // 20. Test delete_project
         const deleteResult = yield* callTool("delete_project", { repoId: report.repoId })
         expect(deleteResult.content[0]?.text).toContain("Deleted index")
         const projectsAfterDelete = yield* callTool("list_projects", {})

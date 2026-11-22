@@ -133,6 +133,13 @@ export const AnalyzeGraphInput = Schema.Struct({
 })
 export type AnalyzeGraphInput = typeof AnalyzeGraphInput.Type
 
+export const CompareSnapshotsInput = Schema.Struct({
+  repoId: Schema.optional(Schema.String),
+  from: Schema.optional(Schema.String),
+  to: Schema.optional(Schema.String)
+})
+export type CompareSnapshotsInput = typeof CompareSnapshotsInput.Type
+
 export const QueryGraphInput = Schema.Struct({
   query: Schema.String,
   repoId: Schema.optional(Schema.String),
@@ -337,6 +344,19 @@ export const createMcpServer = <R>(
               limit: { type: "number", description: "Max results (default varies, max 200)" }
             },
             required: ["analysis"]
+          }
+        },
+        {
+          name: "compare_snapshots",
+          description:
+            "Compares two index runs for a repository and reports total, language, symbol/edge kind and coverage deltas.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              repoId: { type: "string", description: "Optional repo ID" },
+              from: { type: "string", description: "Older snapshot ID (defaults to previous run)" },
+              to: { type: "string", description: "Newer snapshot ID (defaults to latest run)" }
+            }
           }
         },
         {
@@ -887,6 +907,48 @@ export const createMcpServer = <R>(
               return `${header}\n${results.length} result(s)\n\n${body || "none"}`
             })
           )
+          return { content: [{ type: "text", text }] }
+        }
+
+        case "compare_snapshots": {
+          const args = Schema.decodeUnknownSync(CompareSnapshotsInput)(rawArgs ?? {})
+          const result = await runtime.runPromise(
+            Effect.gen(function* () {
+              const store = yield* IndexStore
+              const repoId = yield* getTargetRepoId(args.repoId)
+              return yield* store.compareSnapshots(repoId, args.from, args.to)
+            })
+          )
+          if (!result) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "At least two snapshots are required. Re-index to create a new snapshot."
+                }
+              ]
+            }
+          }
+          const totals = result.totals
+            .map(
+              (entry) =>
+                `  ${entry.name}: ${entry.from} -> ${entry.to} (${entry.delta >= 0 ? "+" : ""}${entry.delta})`
+            )
+            .join("\n")
+          const changes = (label: string, entries: readonly { name: string; delta: number }[]) =>
+            entries.length > 0
+              ? `${label}: ${entries.map((entry) => `${entry.name} ${entry.delta >= 0 ? "+" : ""}${entry.delta}`).join(", ")}`
+              : undefined
+          const text = [
+            `snapshots ${result.repoId}: ${result.from.createdAt} -> ${result.to.createdAt}`,
+            totals,
+            changes("languages", result.languages),
+            changes("symbol kinds", result.symbolKinds),
+            changes("edge kinds", result.edgeKinds),
+            changes("coverage", result.coverage)
+          ]
+            .filter((line): line is string => Boolean(line))
+            .join("\n")
           return { content: [{ type: "text", text }] }
         }
 

@@ -2434,6 +2434,7 @@
         <button type="button" class="insight-tab" data-insight-tab="cycles" data-testid="insights-tab-cycles" role="tab" aria-selected="false">Cycles</button>
         <button type="button" class="insight-tab" data-insight-tab="communities" data-testid="insights-tab-communities" role="tab" aria-selected="false">Communities</button>
         <button type="button" class="insight-tab" data-insight-tab="packages" data-testid="insights-tab-packages" role="tab" aria-selected="false">Packages</button>
+        <button type="button" class="insight-tab" data-insight-tab="snapshots" data-testid="insights-tab-snapshots" role="tab" aria-selected="false">Snapshots</button>
         <button type="button" class="insight-tab" data-insight-tab="changes" data-testid="insights-tab-changes" role="tab" aria-selected="false">Changes</button>
       </div>
       <div class="modal-body" id="insightsBody" data-testid="insights-body"></div>
@@ -2981,10 +2982,48 @@
         }
       }
 
+      function renderSnapshotsInsight(data) {
+        const deltaText = (entry) =>
+          `${entry.from.toLocaleString("en-US")} → ${entry.to.toLocaleString("en-US")} (${entry.delta >= 0 ? "+" : ""}${entry.delta.toLocaleString("en-US")})`;
+        const totals = `<div class="insight-list">${data.totals
+          .map((entry) => insightItem(entry.name, deltaText(entry)))
+          .join("")}</div>`;
+        const group = (title, entries) =>
+          entries.length > 0
+            ? `<div class="details-section"><h3>${escapeHtml(title)}</h3><div class="insight-list">${entries
+                .map((entry) => insightItem(entry.name, `${entry.delta >= 0 ? "+" : ""}${entry.delta}`))
+                .join("")}</div></div>`
+            : "";
+        $("insightsBody").innerHTML = [
+          `<div class="details-section" data-testid="insights-snapshots"><h3>Snapshots</h3><div class="insight-empty">${escapeHtml(data.from.createdAt)} → ${escapeHtml(data.to.createdAt)}</div>${totals}</div>`,
+          group("Languages", data.languages),
+          group("Symbol kinds", data.symbolKinds),
+          group("Edge kinds", data.edgeKinds),
+          group("Coverage", data.coverage),
+        ].join("");
+      }
+
       async function loadInsight(tab) {
         const body = $("insightsBody");
         if (!state.repoId) {
           body.innerHTML = insightEmpty("Select a repository first.");
+          return;
+        }
+
+        if (tab === "snapshots") {
+          body.innerHTML = insightEmpty("Loading snapshots…");
+          try {
+            const data = await fetchJson(
+              `/api/snapshots/compare?repo=${encodeURIComponent(state.repoId)}`,
+            );
+            renderSnapshotsInsight(data);
+          } catch (error) {
+            body.innerHTML = insightEmpty(
+              error.message.includes("At least two")
+                ? "At least two snapshots are required. Re-index to create a new snapshot."
+                : `Could not compare snapshots: ${error.message}`,
+            );
+          }
           return;
         }
 

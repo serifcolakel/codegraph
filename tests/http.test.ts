@@ -153,6 +153,21 @@ describe("HTTP API & visualization", () => {
             expect(reindexRes.filesIndexed).toBe(0)
             expect(reindexRes.filesSkipped).toBe(1)
 
+            const snapshotsRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/snapshots?repo=${encodeURIComponent(report.repoId)}`
+              ).then((r) => r.json())
+            )
+            expect(snapshotsRes.length).toBeGreaterThanOrEqual(2)
+
+            const comparisonRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/snapshots/compare?repo=${encodeURIComponent(report.repoId)}`
+              ).then((r) => r.json())
+            )
+            expect(Array.isArray(comparisonRes.totals)).toBe(true)
+            expect(comparisonRes.from.id).not.toBe(comparisonRes.to.id)
+
             // 12. POST /api/index indexes a new folder from the web UI/API
             const secondDir = path.join(tmpDir, "second-repo")
             yield* fs.makeDirectory(secondDir, { recursive: true })
