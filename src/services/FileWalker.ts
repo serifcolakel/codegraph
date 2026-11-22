@@ -16,6 +16,13 @@ export interface FileWalker {
 
 export const FileWalker = Context.GenericTag<FileWalker>("@codegraph/FileWalker")
 
+const CONFIG_YAML = /^(?:docker-)?compose[^/]*\.ya?ml$|^Chart\.ya?ml$/i
+const CONFIG_PATH = /(^|\/)(k8s|kubernetes|deploy|deployment|helm|manifests)\//i
+
+const isConfigFile = (entry: string, relativePath: string): boolean =>
+  /^Dockerfile(?:\.|$)/i.test(entry) ||
+  (/\.(?:ya?ml)$/i.test(entry) && (CONFIG_YAML.test(entry) || CONFIG_PATH.test(relativePath)))
+
 const DEFAULT_IGNORED_DIRS = new Set([
   "node_modules",
   ".git",
@@ -160,7 +167,7 @@ export const FileWalkerLive = Layer.effect(
                 const ext = path.extname(entry).toLowerCase()
                 // Skip unsupported files, type declarations and minified bundles.
                 if (
-                  !SOURCE_EXTENSIONS.has(ext) ||
+                  (!SOURCE_EXTENSIONS.has(ext) && !isConfigFile(entry, normalizedRelPath)) ||
                   entry.endsWith(".d.ts") ||
                   entry.endsWith(".min.js")
                 ) {

@@ -90,6 +90,18 @@ describe("Markdown documentation indexing", () => {
     }).pipe(Effect.provide(ParserLive))
   )
 
+  it.effect("marks ADR headings as decision nodes", () =>
+    Effect.gen(function* () {
+      const parser = yield* Parser
+      const parsed = yield* parser.parse(
+        "docs/adr/0001-use-sqlite.md",
+        "# Use SQLite for local storage\n\nDecision body.\n"
+      )
+      expect(parsed.symbols[0]?.kind).toBe("decision")
+      expect(parsed.symbols[0]?.name).toBe("Use SQLite for local storage")
+    }).pipe(Effect.provide(ParserLive))
+  )
+
   it.effect("resolves documentation mentions to code symbols", () =>
     Effect.gen(function* () {
       const indexer = yield* Indexer

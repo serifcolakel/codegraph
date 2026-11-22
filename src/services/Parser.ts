@@ -9,6 +9,7 @@ import type {
   SymbolKind,
   SymbolVisibility
 } from "../domain/models.js"
+import { parseDockerfile } from "../parsers/config.js"
 import { astParserFor } from "../parsers/index.js"
 import { withThrowsEdges } from "../parsers/throws.js"
 import { parseGenericFile } from "./GenericParser.js"
@@ -232,6 +233,11 @@ export const ParserLive = Layer.succeed(Parser, {
   parse: (filePath: string, content: string) =>
     Effect.try({
       try: () => {
+        const baseName = filePath.split("/").pop() ?? filePath
+        if (/^Dockerfile(\.|$)/i.test(baseName)) {
+          return parseDockerfile(filePath, content)
+        }
+
         const language = languageForPath(filePath)
         if (!language) {
           return { path: filePath, symbols: [], edges: [], parseStatus: "unsupported" }

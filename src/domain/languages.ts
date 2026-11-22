@@ -13,6 +13,7 @@ export type Language =
   | "php"
   | "scala"
   | "markdown"
+  | "yaml"
 
 const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
   ".ts": "typescript",
@@ -45,10 +46,16 @@ const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
   ".sc": "scala",
   ".md": "markdown",
   ".markdown": "markdown",
-  ".mdx": "markdown"
+  ".mdx": "markdown",
+  ".yml": "yaml",
+  ".yaml": "yaml"
 }
 
-export const SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(Object.keys(EXTENSION_LANGUAGE))
+const CONFIG_ONLY_EXTENSIONS: ReadonlySet<string> = new Set([".yml", ".yaml"])
+
+export const SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(
+  Object.keys(EXTENSION_LANGUAGE).filter((extension) => !CONFIG_ONLY_EXTENSIONS.has(extension))
+)
 
 export const languageForPath = (filePath: string): Language | undefined => {
   const lower = filePath.toLowerCase()
@@ -90,5 +97,7 @@ export const languageLabel = (language: Language): string => {
       return "Scala"
     case "markdown":
       return "Markdown"
+    case "yaml":
+      return "YAML"
   }
 }
