@@ -22,6 +22,8 @@ MCP server.
   FastAPI decorators, linked to their handler symbols.
 - ADR headings indexed as `decision` nodes; Dockerfile stages, Compose services,
   Kubernetes resources and Helm charts indexed as `config` nodes.
+- Event channels from `emit`/`publish`/`on`/`subscribe` calls become deduplicated
+  `channel` nodes with `publishes` and `subscribes` edges.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Graph analytics: PageRank/in-degree/complexity ranking, package rankings,

@@ -36,7 +36,8 @@ Implemented and verified:
   symbols.
 - Markdown headings indexed as `doc` symbols with resolved `mentions` edges.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
-- ADR `decision` nodes and Docker/Compose/Kubernetes/Helm `config` nodes.
+- ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes and
+  deduplicated event `channel` nodes with publishes/subscribes edges.
 - File walker with `.gitignore`, ignore globs, vendor/build-directory exclusions.
 - Graph queries: search, symbol details, references, outline, neighborhood, repo map, file graph.
 - HTTP API with indexing actions:
@@ -140,7 +141,7 @@ Make the MCP server useful for real repository investigations.
 ### Phase 5 — System context (P2)
 
 - [x] Route nodes for Next.js file-based routing, Express-style declarations and FastAPI decorators.
-- [ ] Channel edges for event emitters, pub/sub and message queues where statically resolvable.
+- [x] Channel edges for event emitters and pub/sub where statically resolvable.
 - [x] Documentation sections: Markdown headings as graph nodes with `MENTIONS` links to code.
 - [x] Architecture decision records stored with the index.
 - [ ] OpenAPI and GraphQL schema entities where they add navigable value.
