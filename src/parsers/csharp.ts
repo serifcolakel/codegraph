@@ -220,6 +220,23 @@ export const parseCsharpFile: SourceParser["parse"] = (filePath, content) => {
 
   const visit = (node: Node, fallbackVisibility: ParsedSymbol["visibility"]) => {
     for (const child of node.namedChildren) {
+      if (child.type === "using_directive") {
+        const raw = child.text
+          .replace(/^using\s+(?:static\s+)?/, "")
+          .replace(/;$/, "")
+          .trim()
+        const specifier = raw.includes("=") ? (raw.split("=").pop() ?? raw).trim() : raw
+        if (specifier && !specifier.includes("{")) {
+          addEdge({
+            srcName: specifier.split(".").pop() ?? specifier,
+            dstName: specifier,
+            kind: "import",
+            srcLine: lineOf(child),
+            importPath: specifier
+          })
+        }
+        continue
+      }
       if (
         child.type === "class_declaration" ||
         child.type === "interface_declaration" ||

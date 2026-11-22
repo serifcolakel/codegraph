@@ -50,6 +50,12 @@ export interface IndexStore {
   ) => Effect.Effect<number, StoreError>
   readonly getStats: (repoId?: string) => Effect.Effect<StatsReport, StoreError>
   readonly getCoverage: (repoId: string) => Effect.Effect<ParseCoverage, StoreError>
+  readonly getImportSummary: (
+    repoId: string
+  ) => Effect.Effect<
+    { readonly total: number; readonly resolved: number; readonly unresolved: number },
+    StoreError
+  >
 }
 
 export const IndexStore = Context.GenericTag<IndexStore>("@codegraph/IndexStore")
@@ -145,6 +151,9 @@ export const IndexStoreLive = Layer.effect(
             SELECT id FROM symbols WHERE file_id = ${fileId}
           );
         `
+        yield* sql`
+          DELETE FROM file_edges WHERE src_file_id = ${fileId} OR dst_file_id = ${fileId};
+        `
         // Cascades to the file's symbols and their FTS rows.
         yield* sql`DELETE FROM files WHERE id = ${fileId};`
       })
@@ -218,6 +227,28 @@ export const IndexStoreLive = Layer.effect(
               `
               }
 
+              // File-level import edges are recorded even when the imported
+              // binding is never used, so type-only imports remain visible.
+              const importKeys = new Set<string>()
+              for (const edge of parsed.edges) {
+                if (edge.kind !== "import") continue
+                const specifier = edge.dstName.trim()
+                if (!specifier) continue
+                const srcLine = edge.srcLine ?? 0
+                const key = `${specifier}:${srcLine}`
+                if (importKeys.has(key)) continue
+                importKeys.add(key)
+                const fileEdgeId = `import_${fileId}->${specifier}:${srcLine}`
+                yield* sql`
+                  INSERT OR IGNORE INTO file_edges (
+                    id, repo_id, src_file_id, dst_file_id, specifier, kind, src_line
+                  )
+                  VALUES (
+                    ${fileEdgeId}, ${repoId}, ${fileId}, NULL, ${specifier}, 'imports', ${srcLine}
+                  );
+                `
+              }
+
               // Insert direct intradocument edges (e.g. contains, local calls, local extends)
               for (const edge of parsed.edges) {
                 const srcId = nameToSymbolId.get(edge.srcName)
@@ -275,8 +306,6 @@ export const IndexStoreLive = Layer.effect(
           )
         )
 
-        if (unresolved.length === 0) return 0
-
         const repoSymbols = yield* sql<{
           id: string
           name: string
@@ -306,8 +335,7 @@ export const IndexStoreLive = Layer.effect(
           symbolsByName.set(s.name, list)
         }
 
-        const stripKnownExtension = (filePath: string): string =>
-          filePath.replace(/\.(?:d\.)?[cm]?[jt]sx?$/, "")
+        const stripKnownExtension = (filePath: string): string => filePath.replace(/\.[^./]+$/, "")
 
         const dirname = (filePath: string): string => {
           const idx = filePath.lastIndexOf("/")
@@ -412,7 +440,80 @@ export const IndexStoreLive = Layer.effect(
             Effect.mapError((e) => new StoreError({ message: "Failed to resolve edges", cause: e }))
           )
 
-        return resolvedCount
+        // Resolve file-level imports (recorded even when the binding is unused).
+        const repoFiles = yield* sql<{ id: string; path: string }>`
+          SELECT id, path FROM files WHERE repo_id = ${repoId};
+        `.pipe(
+          Effect.mapError((e) => new StoreError({ message: "Failed to list repo files", cause: e }))
+        )
+
+        const unresolvedImports = yield* sql<{
+          id: string
+          srcFileId: string
+          specifier: string
+          srcLine: number
+          srcFilePath: string
+        }>`
+          SELECT fe.id, fe.src_file_id as srcFileId, fe.specifier, fe.src_line as srcLine,
+                 sf.path as srcFilePath
+          FROM file_edges fe
+          JOIN files sf ON fe.src_file_id = sf.id
+          WHERE fe.repo_id = ${repoId}
+            AND fe.kind = 'imports'
+            AND fe.dst_file_id IS NULL;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to query unresolved imports", cause: e })
+          )
+        )
+
+        let resolvedImportCount = 0
+        if (unresolvedImports.length > 0) {
+          yield* sql
+            .withTransaction(
+              Effect.gen(function* () {
+                for (const row of unresolvedImports) {
+                  const resolved = row.specifier.startsWith(".")
+                    ? resolveRelativeModule(row.srcFilePath, row.specifier)
+                    : resolvePackageModule(row.specifier)
+                  if (resolved === undefined) continue
+
+                  const matches = repoFiles.filter((file) => {
+                    if (file.id === row.srcFileId) return false
+                    const withoutExt = stripKnownExtension(file.path)
+                    return (
+                      withoutExt === resolved ||
+                      withoutExt === `${resolved}/index` ||
+                      dirname(file.path) === resolved
+                    )
+                  })
+                  if (matches.length === 0) continue
+
+                  for (const match of matches) {
+                    const id = `fileimport_${row.srcFileId}->${match.id}:${row.srcLine}`
+                    yield* sql`
+                      INSERT OR IGNORE INTO file_edges (
+                        id, repo_id, src_file_id, dst_file_id, specifier, kind, src_line
+                      )
+                      VALUES (
+                        ${id}, ${repoId}, ${row.srcFileId}, ${match.id}, ${row.specifier},
+                        'imports', ${row.srcLine}
+                      );
+                    `
+                  }
+                  yield* sql`DELETE FROM file_edges WHERE id = ${row.id};`
+                  resolvedImportCount++
+                }
+              })
+            )
+            .pipe(
+              Effect.mapError(
+                (e) => new StoreError({ message: "Failed to resolve file imports", cause: e })
+              )
+            )
+        }
+
+        return resolvedCount + resolvedImportCount
       })
 
     const getCoverage = (repoId: string): Effect.Effect<ParseCoverage, StoreError> =>
@@ -467,6 +568,35 @@ export const IndexStoreLive = Layer.effect(
         }
       })
 
+    const getImportSummary = (
+      repoId: string
+    ): Effect.Effect<
+      { readonly total: number; readonly resolved: number; readonly unresolved: number },
+      StoreError
+    > =>
+      Effect.gen(function* () {
+        const rows = yield* sql<{
+          total: number
+          resolved: number
+          unresolved: number
+        }>`
+          SELECT COUNT(*) as total,
+                 COALESCE(SUM(CASE WHEN dst_file_id IS NULL THEN 0 ELSE 1 END), 0) as resolved,
+                 COALESCE(SUM(CASE WHEN dst_file_id IS NULL THEN 1 ELSE 0 END), 0) as unresolved
+          FROM file_edges
+          WHERE repo_id = ${repoId} AND kind = 'imports';
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to get import summary", cause: e })
+          )
+        )
+        return {
+          total: rows[0]?.total ?? 0,
+          resolved: rows[0]?.resolved ?? 0,
+          unresolved: rows[0]?.unresolved ?? 0
+        }
+      })
+
     const getStats = (repoId?: string): Effect.Effect<StatsReport, StoreError> =>
       Effect.gen(function* () {
         const reposCount = yield* sql<{ count: number }>`SELECT COUNT(*) as count FROM repos;`
@@ -509,7 +639,8 @@ export const IndexStoreLive = Layer.effect(
       deleteFiles,
       resolveEdges,
       getStats,
-      getCoverage
+      getCoverage,
+      getImportSummary
     }
   })
 )

@@ -212,6 +212,20 @@ export const parseJavaFile: SourceParser["parse"] = (filePath, content) => {
   }
 
   for (const child of root.namedChildren) {
+    if (child.type === "import_declaration") {
+      const specifier = child.namedChildren.find((node) => node.type === "scoped_identifier")?.text
+      if (specifier) {
+        const local = specifier.split(".").pop() ?? specifier
+        addEdge({
+          srcName: local,
+          dstName: specifier,
+          kind: "import",
+          srcLine: lineOf(child),
+          importPath: specifier
+        })
+      }
+      continue
+    }
     if (
       child.type === "class_declaration" ||
       child.type === "interface_declaration" ||

@@ -682,6 +682,15 @@ export const GraphQueryLive = Layer.effect(
         return lines.join("\n\n")
       })
 
+    type MutableFileEdge = {
+      srcFileId: string
+      srcPath: string
+      dstFileId: string
+      dstPath: string
+      weight: number
+      kinds: string[]
+    }
+
     const fileGraph = (repoId: string): Effect.Effect<FileGraph, StoreError | NotFoundError> =>
       Effect.gen(function* () {
         const fileRows = yield* sql<{
@@ -732,6 +741,56 @@ export const GraphQueryLive = Layer.effect(
           )
         )
 
+        const importRows = yield* sql<{
+          srcFileId: string
+          srcPath: string
+          dstFileId: string
+          dstPath: string
+          weight: number
+        }>`
+          SELECT fe.src_file_id as srcFileId, sf.path as srcPath,
+                 fe.dst_file_id as dstFileId, df.path as dstPath,
+                 COUNT(*) as weight
+          FROM file_edges fe
+          JOIN files sf ON fe.src_file_id = sf.id
+          JOIN files df ON fe.dst_file_id = df.id
+          WHERE fe.repo_id = ${repoId} AND fe.kind = 'imports' AND fe.dst_file_id IS NOT NULL
+          GROUP BY fe.src_file_id, fe.dst_file_id;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "File graph imports query failed", cause: e })
+          )
+        )
+
+        const edgesByPair = new Map<string, MutableFileEdge>()
+        for (const row of edgeRows) {
+          edgesByPair.set(`${row.srcFileId}->${row.dstFileId}`, {
+            srcFileId: row.srcFileId,
+            srcPath: row.srcPath,
+            dstFileId: row.dstFileId,
+            dstPath: row.dstPath,
+            weight: row.weight,
+            kinds: (row.kindsStr ?? "").split(",").filter(Boolean)
+          })
+        }
+        for (const row of importRows) {
+          const key = `${row.srcFileId}->${row.dstFileId}`
+          const existing = edgesByPair.get(key)
+          if (existing) {
+            existing.weight += row.weight
+            if (!existing.kinds.includes("imports")) existing.kinds.push("imports")
+          } else {
+            edgesByPair.set(key, {
+              srcFileId: row.srcFileId,
+              srcPath: row.srcPath,
+              dstFileId: row.dstFileId,
+              dstPath: row.dstPath,
+              weight: row.weight,
+              kinds: ["imports"]
+            })
+          }
+        }
+
         return {
           nodes: fileRows.map((r) => ({
             id: r.id,
@@ -739,14 +798,7 @@ export const GraphQueryLive = Layer.effect(
             symbolCount: r.symbolCount,
             inDegree: r.inDegree
           })),
-          edges: edgeRows.map((r) => ({
-            srcFileId: r.srcFileId,
-            srcPath: r.srcPath,
-            dstFileId: r.dstFileId,
-            dstPath: r.dstPath,
-            weight: r.weight,
-            kinds: (r.kindsStr ?? "").split(",").filter(Boolean)
-          }))
+          edges: Array.from(edgesByPair.values())
         }
       })
 

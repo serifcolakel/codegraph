@@ -148,6 +148,39 @@ export const initSchema = Effect.gen(function* () {
     Effect.mapError((e) => new StoreError({ message: "Failed to create idx_edges_dst", cause: e }))
   )
 
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS file_edges (
+      id TEXT PRIMARY KEY,
+      repo_id TEXT NOT NULL,
+      src_file_id TEXT NOT NULL,
+      dst_file_id TEXT,
+      specifier TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      src_line INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY(repo_id) REFERENCES repos(id) ON DELETE CASCADE
+    );
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create file_edges table", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_file_edges_repo ON file_edges(repo_id);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_file_edges_repo", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_file_edges_src ON file_edges(src_file_id);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_file_edges_src", cause: e })
+    )
+  )
+
   const ftsTables = yield* sql<{ name: string }>`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_fts';
   `.pipe(

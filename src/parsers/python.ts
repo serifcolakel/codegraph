@@ -46,7 +46,11 @@ const signatureOf = (node: Node): string => {
   return normalizeSignature(raw.replace(/:\s*$/, ""))
 }
 
-type ImportBinding = { readonly specifier: string; readonly importedName: string }
+type ImportBinding = {
+  readonly specifier: string
+  readonly importedName: string
+  readonly line: number
+}
 
 const collectImports = (root: Node): Map<string, ImportBinding> => {
   const bindings = new Map<string, ImportBinding>()
@@ -58,7 +62,11 @@ const collectImports = (root: Node): Map<string, ImportBinding> => {
         const alias = item.type === "aliased_import" ? childText(item, "alias") : undefined
         if (!imported) continue
         const local = alias ?? imported.split(".").pop() ?? imported
-        bindings.set(local, { specifier: imported, importedName: local })
+        bindings.set(local, {
+          specifier: imported,
+          importedName: local,
+          line: lineOf(child)
+        })
       }
     } else if (child.type === "import_from_statement") {
       const specifier = childText(child, "module_name")
@@ -70,7 +78,11 @@ const collectImports = (root: Node): Map<string, ImportBinding> => {
         const alias = item.type === "aliased_import" ? childText(item, "alias") : undefined
         if (!imported) continue
         const local = alias ?? imported.split(".").pop() ?? imported
-        bindings.set(local, { specifier, importedName: imported.split(".").pop() ?? imported })
+        bindings.set(local, {
+          specifier,
+          importedName: imported.split(".").pop() ?? imported,
+          line: lineOf(child)
+        })
       }
     }
   }
@@ -97,6 +109,15 @@ export const parsePythonFile: SourceParser["parse"] = (filePath, content) => {
   }
 
   const imports = collectImports(root)
+  for (const [local, binding] of imports) {
+    addEdge({
+      srcName: local,
+      dstName: binding.specifier,
+      kind: "import",
+      srcLine: binding.line,
+      importPath: binding.specifier
+    })
+  }
 
   const docFor = (body: Node | null, commentStart: number): string => {
     const docstring = docstringOf(body)

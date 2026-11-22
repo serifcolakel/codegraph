@@ -165,6 +165,11 @@ class FundService:
       const ftsCount = yield* sql<{ count: number }>`SELECT COUNT(*) as count FROM symbols_fts;`
       expect(ftsCount[0]?.count).toBe(1)
 
+      const fileEdgeColumns = yield* sql<{ name: string }>`PRAGMA table_info(file_edges);`
+      expect(fileEdgeColumns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(["repo_id", "src_file_id", "dst_file_id", "specifier", "kind"])
+      )
+
       const byPart = yield* sql<{ symbol_id: string }>`
         SELECT symbol_id FROM symbols_fts WHERE symbols_fts MATCH 'fund';
       `

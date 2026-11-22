@@ -35,7 +35,7 @@ const receiverInfo = (
   return variable ? { typeName, variable } : { typeName }
 }
 
-type ImportBinding = { readonly specifier: string }
+type ImportBinding = { readonly specifier: string; readonly line: number }
 
 const collectImports = (root: Node): Map<string, ImportBinding> => {
   const bindings = new Map<string, ImportBinding>()
@@ -47,7 +47,7 @@ const collectImports = (root: Node): Map<string, ImportBinding> => {
     const specifier = literal.text.replace(/^["`]|["`]$/g, "")
     const alias = spec.namedChildren.find((child) => child.type === "package_identifier")?.text
     const local = alias ?? specifier.split("/").pop() ?? specifier
-    bindings.set(local, { specifier })
+    bindings.set(local, { specifier, line: lineOf(spec) })
   }
   return bindings
 }
@@ -69,6 +69,16 @@ export const parseGoFile: SourceParser["parse"] = (filePath, content) => {
     if (edgeKeys.has(key)) return
     edgeKeys.add(key)
     edges.push(edge)
+  }
+
+  for (const [local, binding] of imports) {
+    addEdge({
+      srcName: local,
+      dstName: binding.specifier,
+      kind: "import",
+      srcLine: binding.line,
+      importPath: binding.specifier
+    })
   }
 
   const docAt = (row: number): string => leadingComment(lines, row, /^\s*\/\//)

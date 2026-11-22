@@ -25,6 +25,11 @@ export interface RepoStatus {
   readonly stats: StatsReport
   readonly coverage: ParseCoverage
   readonly unresolved: UnresolvedSummary
+  readonly imports: {
+    readonly total: number
+    readonly resolved: number
+    readonly unresolved: number
+  }
 }
 
 export interface Diagnostics {
@@ -95,8 +100,13 @@ export const DiagnosticsLive = Layer.effect(
         if (!repo) {
           return yield* Effect.fail(new NotFoundError({ entity: "Repository", id: repoId }))
         }
-        const [stats, coverage, unresolved] = yield* Effect.all(
-          [store.getStats(repo.id), store.getCoverage(repo.id), unresolvedFor(repo.id)],
+        const [stats, coverage, unresolved, imports] = yield* Effect.all(
+          [
+            store.getStats(repo.id),
+            store.getCoverage(repo.id),
+            unresolvedFor(repo.id),
+            store.getImportSummary(repo.id)
+          ],
           { concurrency: 1 }
         )
         return {
@@ -105,7 +115,8 @@ export const DiagnosticsLive = Layer.effect(
           rootPath: repo.rootPath,
           stats,
           coverage,
-          unresolved
+          unresolved,
+          imports
         }
       })
 
@@ -143,6 +154,7 @@ export const formatStatus = (status: RepoStatus): string => {
     `  coverage: parsed=${status.coverage.parsed} partial=${status.coverage.partial} skipped=${status.coverage.skipped} unsupported=${status.coverage.unsupported} unknown=${status.coverage.unknown}`,
     `  languages: ${languages || "none"}`,
     `  unresolved edges: ${status.unresolved.total} (missing symbol=${status.unresolved.missingSymbol}, missing module=${status.unresolved.missingModule})`,
+    `  file imports: ${status.imports.total} (resolved=${status.imports.resolved}, unresolved=${status.imports.unresolved})`,
     `  unresolved by kind: ${kinds || "none"}`
   ]
 

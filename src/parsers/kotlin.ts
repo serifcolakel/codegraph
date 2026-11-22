@@ -191,6 +191,18 @@ export const parseKotlinFile: SourceParser["parse"] = (filePath, content) => {
   }
 
   for (const child of root.namedChildren) {
+    if (child.type === "import_header") {
+      const raw = child.text.replace(/^import\s+/, "").trim()
+      const specifier = raw.split(/\s+as\s+/)[0] ?? raw
+      addEdge({
+        srcName: specifier.split(".").pop() ?? specifier,
+        dstName: specifier,
+        kind: "import",
+        srcLine: lineOf(child),
+        importPath: specifier
+      })
+      continue
+    }
     if (child.type === "class_declaration" || child.type === "object_declaration") {
       addType(child)
     } else if (child.type === "function_declaration") {

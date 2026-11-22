@@ -176,6 +176,22 @@ export const parseRustFile: SourceParser["parse"] = (filePath, content) => {
   }
 
   for (const child of root.namedChildren) {
+    if (child.type === "use_declaration") {
+      const raw = child.text
+        .replace(/^use\s+/, "")
+        .replace(/;$/, "")
+        .trim()
+      if (raw && !raw.includes("{")) {
+        addEdge({
+          srcName: raw.split("::").pop() ?? raw,
+          dstName: raw,
+          kind: "import",
+          srcLine: lineOf(child),
+          importPath: raw
+        })
+      }
+      continue
+    }
     switch (child.type) {
       case "function_item":
         addFunction(child)
