@@ -8,6 +8,7 @@ import {
   McpError
 } from "@modelcontextprotocol/sdk/types.js"
 import { Effect, type ManagedRuntime, Schema } from "effect"
+import { Analytics } from "../services/Analytics.js"
 import { ChangeImpact } from "../services/ChangeImpact.js"
 import { Diagnostics, formatStatus } from "../services/Diagnostics.js"
 import { GraphQuery } from "../services/GraphQuery.js"
@@ -115,6 +116,14 @@ export const ArchitectureInput = Schema.Struct({
 })
 export type ArchitectureInput = typeof ArchitectureInput.Type
 
+export const AnalyzeGraphInput = Schema.Struct({
+  analysis: Schema.Literal("pagerank", "in_degree", "hotspots", "dead_code", "cycles"),
+  repoId: Schema.optional(Schema.String),
+  level: Schema.optional(Schema.Literal("symbol", "file")),
+  limit: Schema.optional(Schema.Number)
+})
+export type AnalyzeGraphInput = typeof AnalyzeGraphInput.Type
+
 export const QueryGraphInput = Schema.Struct({
   query: Schema.String,
   repoId: Schema.optional(Schema.String),
@@ -156,6 +165,7 @@ export const createMcpServer = <R>(
     | IndexJobs
     | IndexJobRunner
     | QueryLanguage
+    | Analytics
     | FileSystem.FileSystem
     | Path.Path
     | R,
@@ -297,6 +307,24 @@ export const createMcpServer = <R>(
           name: "list_projects",
           description: "Lists indexed repositories with their IDs, roots and index counts.",
           inputSchema: { type: "object", properties: {} }
+        },
+        {
+          name: "analyze_graph",
+          description:
+            "Ranks symbols, finds hotspots, dead-code candidates and call/import cycles.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              analysis: {
+                type: "string",
+                enum: ["pagerank", "in_degree", "hotspots", "dead_code", "cycles"]
+              },
+              repoId: { type: "string", description: "Optional repo ID" },
+              level: { type: "string", enum: ["symbol", "file"], description: "Cycle level" },
+              limit: { type: "number", description: "Max results (default varies, max 200)" }
+            },
+            required: ["analysis"]
+          }
         },
         {
           name: "query_graph",
@@ -738,6 +766,78 @@ export const createMcpServer = <R>(
           return { content: [{ type: "text", text }] }
         }
 
+        case "analyze_graph": {
+          const args = Schema.decodeUnknownSync(AnalyzeGraphInput)(rawArgs ?? {})
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const analytics = yield* Analytics
+              const repoId = yield* getTargetRepoId(args.repoId)
+              const header = `analysis=${args.analysis} repo=${repoId}`
+
+              if (args.analysis === "cycles") {
+                const groups = yield* analytics.cycles(repoId, {
+                  level: args.level ?? "symbol",
+                  ...(args.limit !== undefined ? { limit: args.limit } : {})
+                })
+                if (groups.length === 0) return `${header}\nNo cycles found.`
+                const body = groups
+                  .map((group, index) => {
+                    const members = group.members
+                      .map(
+                        (member) =>
+                          `  ${member.name ?? member.id} ${member.filePath}${member.startLine ? `:${member.startLine}` : ""}`
+                      )
+                      .join("\n")
+                    return `cycle ${index + 1} (size=${group.size}, level=${group.level})\n${members}`
+                  })
+                  .join("\n\n")
+                return `${header}\n${groups.length} cycle(s)\n\n${body}`
+              }
+
+              if (args.analysis === "dead_code") {
+                const results = yield* analytics.deadCode(repoId, {
+                  ...(args.limit !== undefined ? { limit: args.limit } : {})
+                })
+                if (results.length === 0) return `${header}\nNo dead-code candidates.`
+                const body = results
+                  .map(
+                    (symbol) =>
+                      `${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} [${symbol.language}]`
+                  )
+                  .join("\n")
+                return `${header}\n${results.length} candidate(s)\n\n${body}`
+              }
+
+              if (args.analysis === "hotspots") {
+                const results = yield* analytics.hotspots(repoId, {
+                  ...(args.limit !== undefined ? { limit: args.limit } : {})
+                })
+                const body = results
+                  .map(
+                    (symbol, index) =>
+                      `${index + 1}. ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} score=${symbol.score} fanIn=${symbol.fanIn} fanOut=${symbol.fanOut}`
+                  )
+                  .join("\n")
+                return `${header}\n${results.length} hotspot(s)\n\n${body || "none"}`
+              }
+
+              const algorithm = args.analysis === "in_degree" ? "in_degree" : "pagerank"
+              const results = yield* analytics.rank(repoId, {
+                algorithm,
+                ...(args.limit !== undefined ? { limit: args.limit } : {})
+              })
+              const body = results
+                .map(
+                  (symbol, index) =>
+                    `${index + 1}. ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} score=${symbol.score} in=${symbol.inDegree} out=${symbol.outDegree}`
+                )
+                .join("\n")
+              return `${header}\n${results.length} result(s)\n\n${body || "none"}`
+            })
+          )
+          return { content: [{ type: "text", text }] }
+        }
+
         case "query_graph": {
           const args = Schema.decodeUnknownSync(QueryGraphInput)(rawArgs ?? {})
           const result = await runtime.runPromise(
@@ -1062,6 +1162,7 @@ export const startMcpServer = <R>(
     | IndexJobs
     | IndexJobRunner
     | QueryLanguage
+    | Analytics
     | FileSystem.FileSystem
     | Path.Path
     | R,

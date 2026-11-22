@@ -7,6 +7,7 @@ import { Console, Effect, Layer, ManagedRuntime, Stream } from "effect"
 import { appConfig } from "../domain/config.js"
 import { serveHttp } from "../http/index.js"
 import { startMcpServer } from "../mcp/index.js"
+import { type Analytics, AnalyticsLive } from "../services/Analytics.js"
 import { ChangeImpact, ChangeImpactLive } from "../services/ChangeImpact.js"
 import { Diagnostics, DiagnosticsLive, formatStatus } from "../services/Diagnostics.js"
 import { FileWalkerLive } from "../services/FileWalker.js"
@@ -193,6 +194,7 @@ const mcpCommand = Command.make("mcp", {}, () =>
       | IndexJobs
       | IndexJobRunner
       | QueryLanguage
+      | Analytics
       | FileSystem.FileSystem
       | Path.Path
     >()
@@ -226,6 +228,7 @@ export const MainLive = Layer.unwrapEffect(
     const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
     const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
     const QueryLanguageServiceLive = QueryLanguageLive.pipe(Layer.provide(SqlLive))
+    const AnalyticsServiceLive = AnalyticsLive.pipe(Layer.provide(SqlLive))
     const DiagnosticsServiceLive = DiagnosticsLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
     )
@@ -247,6 +250,7 @@ export const MainLive = Layer.unwrapEffect(
       IndexerServiceLive,
       IndexJobsServiceLive,
       QueryLanguageServiceLive,
+      AnalyticsServiceLive,
       IndexJobRunnerLive.pipe(
         Layer.provide(Layer.mergeAll(IndexJobsServiceLive, IndexerServiceLive))
       ),
