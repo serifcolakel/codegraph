@@ -12,6 +12,7 @@ import { ChangeImpact, ChangeImpactLive } from "../services/ChangeImpact.js"
 import { CrossRepo, CrossRepoLive } from "../services/CrossRepo.js"
 import { Diagnostics, DiagnosticsLive, formatStatus } from "../services/Diagnostics.js"
 import { FileWalkerLive } from "../services/FileWalker.js"
+import { Freshness, FreshnessLive } from "../services/Freshness.js"
 import { GitChangesLive } from "../services/GitChanges.js"
 import { type GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../services/Indexer.js"
@@ -153,7 +154,36 @@ const linkCommand = Command.make("link", {}, () =>
   })
 )
 
-// 6. Change impact command (git diff -> affected symbols and blast radius)
+// 6. Freshness command (compare disk against the index)
+const freshnessCommand = Command.make(
+  "freshness",
+  { repo: Args.text({ name: "repo" }) },
+  ({ repo }) =>
+    Effect.gen(function* () {
+      const store = yield* IndexStore
+      yield* store.initSchema()
+      const freshness = yield* Freshness
+      const report = yield* freshness
+        .check(repo)
+        .pipe(Effect.catchAll((error) => Console.error(`${error._tag}: ${error.message}`)))
+      if (!report) return
+      yield* Console.log(`\n=== Freshness: ${report.repoName} ===`)
+      yield* Console.log(`Indexed at: ${report.indexedAt ?? "unknown"}`)
+      yield* Console.log(
+        `Files: scanned=${report.files.scanned} indexed=${report.files.indexed} unchanged=${report.files.unchanged}`
+      )
+      yield* Console.log(
+        `Changes: added=${report.files.added} modified=${report.files.modified} deleted=${report.files.deleted}`
+      )
+      yield* Console.log(`Stale: ${report.stale}`)
+      for (const sample of report.samples.added) yield* Console.log(`  + ${sample.path}`)
+      for (const sample of report.samples.modified) yield* Console.log(`  ~ ${sample.path}`)
+      for (const sample of report.samples.deleted) yield* Console.log(`  - ${sample.path}`)
+      yield* Console.log("")
+    })
+)
+
+// 7. Change impact command (git diff -> affected symbols and blast radius)
 const changesCommand = Command.make(
   "changes",
   {
@@ -204,6 +234,7 @@ const mcpCommand = Command.make("mcp", {}, () =>
       | GraphQuery
       | Diagnostics
       | ChangeImpact
+      | Freshness
       | Indexer
       | IndexJobs
       | IndexJobRunner
@@ -224,6 +255,7 @@ const rootCommand = Command.make("codegraph").pipe(
     indexCommand,
     statsCommand,
     coverageCommand,
+    freshnessCommand,
     changesCommand,
     linkCommand,
     serveCommand,
@@ -253,6 +285,9 @@ export const MainLive = Layer.unwrapEffect(
       Layer.provide(Layer.mergeAll(StoreLive, QueryLive, GitChangesLive))
     )
     const WalkerLive = FileWalkerLive.pipe(Layer.provide(NodeContext.layer))
+    const FreshnessServiceLive = FreshnessLive.pipe(
+      Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, NodeContext.layer))
+    )
     const IndexJobsServiceLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
     const IndexerServiceLive = IndexerLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, NodeContext.layer))
@@ -274,6 +309,7 @@ export const MainLive = Layer.unwrapEffect(
       ),
       DiagnosticsServiceLive,
       ChangeImpactServiceLive,
+      FreshnessServiceLive,
       GitChangesLive,
       NodeContext.layer
     )

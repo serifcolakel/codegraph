@@ -9,6 +9,7 @@ import { makeHttpRouter } from "../src/http/index.js"
 import { AnalyticsLive } from "../src/services/Analytics.js"
 import { ChangeImpactLive } from "../src/services/ChangeImpact.js"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
+import { FreshnessLive } from "../src/services/Freshness.js"
 import { GitChangesLive } from "../src/services/GitChanges.js"
 import { GraphQueryLive } from "../src/services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
@@ -168,6 +169,14 @@ describe("HTTP API & visualization", () => {
             expect(Array.isArray(comparisonRes.totals)).toBe(true)
             expect(comparisonRes.from.id).not.toBe(comparisonRes.to.id)
 
+            const freshnessRes = yield* Effect.tryPromise(() =>
+              fetch(
+                `http://127.0.0.1:${TEST_PORT}/api/freshness?repo=${encodeURIComponent(report.repoId)}`
+              ).then((r) => r.json())
+            )
+            expect(freshnessRes.stale).toBe(false)
+            expect(freshnessRes.files.unchanged).toBe(1)
+
             // 12. POST /api/index indexes a new folder from the web UI/API
             const secondDir = path.join(tmpDir, "second-repo")
             yield* fs.makeDirectory(secondDir, { recursive: true })
@@ -271,6 +280,9 @@ describe("HTTP API & visualization", () => {
           )
           const PlatformLive = Layer.merge(NodeFileSystem.layer, NodePath.layer)
           const WalkerLive = FileWalkerLive.pipe(Layer.provide(PlatformLive))
+          const FreshnessServiceLive = FreshnessLive.pipe(
+            Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, PlatformLive))
+          )
           const IndexerTestLive = IndexerLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, PlatformLive))
           )
@@ -285,6 +297,7 @@ describe("HTTP API & visualization", () => {
             RunnerLive,
             AnalyticsServiceLive,
             ChangeImpactServiceLive,
+            FreshnessServiceLive,
             PlatformLive
           )
         })()

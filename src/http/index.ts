@@ -11,6 +11,7 @@ import { NodeHttpServer } from "@effect/platform-node"
 import { Effect, Either, Schema } from "effect"
 import { Analytics } from "../services/Analytics.js"
 import { ChangeImpact } from "../services/ChangeImpact.js"
+import { Freshness } from "../services/Freshness.js"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { Indexer } from "../services/Indexer.js"
 import { IndexJobRunner } from "../services/IndexJobRunner.js"
@@ -24,6 +25,7 @@ export const makeHttpRouter = Effect.gen(function* () {
   const jobs = yield* IndexJobs
   const jobRunner = yield* IndexJobRunner
   const analytics = yield* Analytics
+  const freshness = yield* Freshness
   const changeImpact = yield* ChangeImpact
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
@@ -82,7 +84,29 @@ export const makeHttpRouter = Effect.gen(function* () {
       })
     ),
 
-    // 2. GET /api/snapshots?repo=&limit=
+    // 2. GET /api/freshness?repo=
+    HttpRouter.get(
+      "/api/freshness",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const repoId = url.searchParams.get("repo")
+        if (!repoId) {
+          return yield* HttpServerResponse.json(
+            { error: "Query parameter 'repo' is required." },
+            { status: 400 }
+          )
+        }
+        const result = yield* freshness.check(repoId).pipe(Effect.either)
+        if (Either.isLeft(result)) {
+          const status = result.left._tag === "NotFoundError" ? 404 : 500
+          return yield* HttpServerResponse.json({ error: result.left.message }, { status })
+        }
+        return yield* HttpServerResponse.json(result.right)
+      })
+    ),
+
+    // 3. GET /api/snapshots?repo=&limit=
     HttpRouter.get(
       "/api/snapshots",
       Effect.gen(function* () {

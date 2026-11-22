@@ -12,6 +12,7 @@ import { Analytics } from "../services/Analytics.js"
 import { ChangeImpact } from "../services/ChangeImpact.js"
 import { CrossRepo } from "../services/CrossRepo.js"
 import { Diagnostics, formatStatus } from "../services/Diagnostics.js"
+import { Freshness } from "../services/Freshness.js"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { Indexer } from "../services/Indexer.js"
 import { IndexJobRunner } from "../services/IndexJobRunner.js"
@@ -204,6 +205,7 @@ export const createMcpServer = <R>(
     | QueryLanguage
     | Analytics
     | CrossRepo
+    | Freshness
     | FileSystem.FileSystem
     | Path.Path
     | R,
@@ -1262,7 +1264,15 @@ export const createMcpServer = <R>(
               const diagnostics = yield* Diagnostics
               const repoId = yield* getTargetRepoId(args.repoId)
               const status = yield* diagnostics.repoStatus(repoId)
-              return formatStatus(status)
+              const freshness = yield* Freshness
+              const freshnessLine = yield* freshness.check(repoId).pipe(
+                Effect.map(
+                  (report) =>
+                    `freshness: stale=${report.stale} added=${report.files.added} modified=${report.files.modified} deleted=${report.files.deleted}`
+                ),
+                Effect.catchAll((error) => Effect.succeed(`freshness: unavailable (${error._tag})`))
+              )
+              return `${formatStatus(status)}\n  ${freshnessLine}`
             })
           )
           return { content: [{ type: "text", text }] }
@@ -1332,6 +1342,7 @@ export const startMcpServer = <R>(
     | QueryLanguage
     | Analytics
     | CrossRepo
+    | Freshness
     | FileSystem.FileSystem
     | Path.Path
     | R,

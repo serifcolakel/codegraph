@@ -11,6 +11,7 @@ import { type ChangeImpact, ChangeImpactLive } from "../src/services/ChangeImpac
 import { type CrossRepo, CrossRepoLive } from "../src/services/CrossRepo.js"
 import { type Diagnostics, DiagnosticsLive } from "../src/services/Diagnostics.js"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
+import { FreshnessLive } from "../src/services/Freshness.js"
 import { GitChangesLive } from "../src/services/GitChanges.js"
 import { type GraphQuery, GraphQueryLive } from "../src/services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
@@ -78,6 +79,7 @@ function unusedHelper(): number {
           | QueryLanguage
           | Analytics
           | CrossRepo
+          | Freshness
           | FileSystem.FileSystem
           | Path.Path
         >()
@@ -154,6 +156,7 @@ function unusedHelper(): number {
         const statusResult = yield* callTool("index_status", { repoId: report.repoId })
         expect(statusResult.content[0]?.text).toContain("coverage:")
         expect(statusResult.content[0]?.text).toContain("unresolved edges:")
+        expect(statusResult.content[0]?.text).toContain("freshness: stale=false")
 
         // 6. Test detect_changes error path on a non-git directory
         const detectResult = (yield* callTool("detect_changes", {
@@ -350,6 +353,9 @@ function unusedHelper(): number {
           )
           const PlatformLive = Layer.merge(NodeFileSystem.layer, NodePath.layer)
           const WalkerLive = FileWalkerLive.pipe(Layer.provide(PlatformLive))
+          const FreshnessServiceLive = FreshnessLive.pipe(
+            Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, PlatformLive))
+          )
           const IndexerTestLive = IndexerLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, PlatformLive))
           )
@@ -367,6 +373,7 @@ function unusedHelper(): number {
             LanguageLive,
             AnalyticsServiceLive,
             CrossRepoServiceLive,
+            FreshnessServiceLive,
             PlatformLive
           )
         })()
