@@ -12,6 +12,8 @@ import { FileWalkerLive } from "../src/services/FileWalker.js"
 import { GitChangesLive } from "../src/services/GitChanges.js"
 import { type GraphQuery, GraphQueryLive } from "../src/services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
+import { type IndexJobRunner, IndexJobRunnerLive } from "../src/services/IndexJobRunner.js"
+import { type IndexJobs, IndexJobsLive } from "../src/services/IndexJobs.js"
 import { type IndexStore, IndexStoreLive } from "../src/services/IndexStore.js"
 import { ParserLive } from "../src/services/Parser.js"
 
@@ -64,6 +66,8 @@ export function top(): string {
           | Diagnostics
           | ChangeImpact
           | Indexer
+          | IndexJobs
+          | IndexJobRunner
           | FileSystem.FileSystem
           | Path.Path
         >()
@@ -101,6 +105,7 @@ export function top(): string {
         expect(toolNames).toContain("search_code")
         expect(toolNames).toContain("list_projects")
         expect(toolNames).toContain("index_repository")
+        expect(toolNames).toContain("index_job_status")
         expect(toolNames).toContain("delete_project")
         expect(toolNames).toContain("search_graph")
         expect(toolNames).toContain("get_architecture")
@@ -175,12 +180,33 @@ export function top(): string {
         expect(reindexResult.content[0]?.text).toContain("indexed mcp-test-repo")
         expect(reindexResult.content[0]?.text).toContain("coverage:")
 
-        // 10. Test list_projects
+        // 10. Test async indexing and job status
+        const asyncIndex = yield* callTool("index_repository", {
+          path: tmpDir,
+          name: "mcp-test-repo",
+          force: true,
+          async: true
+        })
+        const jobId = asyncIndex.content[0]?.text.match(/job (job_[A-Za-z0-9_]+)/)?.[1]
+        expect(jobId).toBeTruthy()
+        if (!jobId) throw new Error("async index did not return a job id")
+
+        let jobText = ""
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const status = yield* callTool("index_job_status", { jobId })
+          jobText = status.content[0]?.text ?? ""
+          if (jobText.includes("status=completed") || jobText.includes("status=failed")) break
+          yield* Effect.sleep("50 millis")
+        }
+        expect(jobText).toContain("status=completed")
+        expect(jobText).toContain("repoId:")
+
+        // 11. Test list_projects
         const projectsResult = yield* callTool("list_projects", {})
         expect(projectsResult.content[0]?.text).toContain("mcp-test-repo")
         expect(projectsResult.content[0]?.text).toContain(report.repoId)
 
-        // 11. Test search_graph with regex, kind filter and paging
+        // 12. Test search_graph with regex, kind filter and paging
         const graphSearch = yield* callTool("search_graph", {
           namePattern: "Memory.*",
           regex: true,
@@ -199,12 +225,12 @@ export function top(): string {
         })
         expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
 
-        // 12. Test get_graph_schema
+        // 13. Test get_graph_schema
         const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
-        // 13. Test get_code_snippet by qualified name
+        // 14. Test get_code_snippet by qualified name
         const snippetResult = yield* callTool("get_code_snippet", {
           qualifiedName: "service.MemoryDataService",
           repoId: report.repoId
@@ -219,14 +245,14 @@ export function top(): string {
         })
         expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
 
-        // 14. Test search_code
+        // 15. Test search_code
         const searchCodeResult = yield* callTool("search_code", {
           query: "MemoryDataService",
           repoId: report.repoId
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 15. Test read_file_range
+        // 16. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
@@ -236,7 +262,7 @@ export function top(): string {
         expect(readRangeResult.content[0]?.text).toContain("1 |")
         expect(readRangeResult.content[0]?.text).toContain("DataService")
 
-        // 16. Test delete_project
+        // 17. Test delete_project
         const deleteResult = yield* callTool("delete_project", { repoId: report.repoId })
         expect(deleteResult.content[0]?.text).toContain("Deleted index")
         const projectsAfterDelete = yield* callTool("list_projects", {})
@@ -250,6 +276,7 @@ export function top(): string {
           const SqlLive = Sqlite.SqliteClient.layer({ filename: ":memory:" })
           const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
           const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
+          const JobsLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
           const DiagnosticsServiceLive = DiagnosticsLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, SqlLive))
           )
@@ -261,12 +288,17 @@ export function top(): string {
           const IndexerTestLive = IndexerLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, PlatformLive))
           )
+          const RunnerLive = IndexJobRunnerLive.pipe(
+            Layer.provide(Layer.mergeAll(JobsLive, IndexerTestLive))
+          )
           return Layer.mergeAll(
             IndexerTestLive,
             StoreLive,
             QueryLive,
             DiagnosticsServiceLive,
             ChangeImpactServiceLive,
+            JobsLive,
+            RunnerLive,
             PlatformLive
           )
         })()

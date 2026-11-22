@@ -12,6 +12,8 @@ import { ChangeImpact } from "../services/ChangeImpact.js"
 import { Diagnostics, formatStatus } from "../services/Diagnostics.js"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { Indexer } from "../services/Indexer.js"
+import { IndexJobRunner } from "../services/IndexJobRunner.js"
+import { IndexJobs } from "../services/IndexJobs.js"
 import { IndexStore } from "../services/IndexStore.js"
 
 const docSnippet = (doc?: string): string =>
@@ -75,6 +77,11 @@ export type CodeSnippetInput = typeof CodeSnippetInput.Type
 export const ListProjectsInput = Schema.Struct({})
 export type ListProjectsInput = typeof ListProjectsInput.Type
 
+export const IndexJobStatusInput = Schema.Struct({
+  jobId: Schema.String
+})
+export type IndexJobStatusInput = typeof IndexJobStatusInput.Type
+
 export const DeleteProjectInput = Schema.Struct({
   repoId: Schema.String
 })
@@ -83,7 +90,8 @@ export type DeleteProjectInput = typeof DeleteProjectInput.Type
 export const IndexRepositoryInput = Schema.Struct({
   path: Schema.String,
   name: Schema.optional(Schema.String),
-  force: Schema.optional(Schema.Boolean)
+  force: Schema.optional(Schema.Boolean),
+  async: Schema.optional(Schema.Boolean)
 })
 export type IndexRepositoryInput = typeof IndexRepositoryInput.Type
 
@@ -137,6 +145,8 @@ export const createMcpServer = <R>(
     | Diagnostics
     | ChangeImpact
     | Indexer
+    | IndexJobs
+    | IndexJobRunner
     | FileSystem.FileSystem
     | Path.Path
     | R,
@@ -232,6 +242,20 @@ export const createMcpServer = <R>(
           }
         },
         {
+          name: "index_job_status",
+          description: "Returns the status and result summary of an async indexing job.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              jobId: {
+                type: "string",
+                description: "Job ID returned by index_repository(async=true)"
+              }
+            },
+            required: ["jobId"]
+          }
+        },
+        {
           name: "delete_project",
           description: "Deletes an indexed repository and its symbols, edges and import records.",
           inputSchema: {
@@ -251,7 +275,11 @@ export const createMcpServer = <R>(
             properties: {
               path: { type: "string", description: "Absolute or relative repository path" },
               name: { type: "string", description: "Optional display name" },
-              force: { type: "boolean", description: "Reparse every file even if unchanged" }
+              force: { type: "boolean", description: "Reparse every file even if unchanged" },
+              async: {
+                type: "boolean",
+                description: "Return a job id immediately and index in the background"
+              }
             },
             required: ["path"]
           }
@@ -573,6 +601,36 @@ export const createMcpServer = <R>(
           return { content: [{ type: "text", text }] }
         }
 
+        case "index_job_status": {
+          const args = Schema.decodeUnknownSync(IndexJobStatusInput)(rawArgs ?? {})
+          const result = await runtime.runPromise(
+            Effect.gen(function* () {
+              const jobs = yield* IndexJobs
+              return yield* jobs.getJob(args.jobId)
+            })
+          )
+          if (!result) {
+            return { content: [{ type: "text", text: `Job not found: ${args.jobId}.` }] }
+          }
+          const report = result.report as
+            | { filesIndexed?: number; symbolsCount?: number; edgesCount?: number }
+            | undefined
+          const text = [
+            `job ${result.id} status=${result.status}`,
+            `  path: ${result.path}`,
+            result.repoId ? `  repoId: ${result.repoId}` : undefined,
+            result.startedAt ? `  started: ${result.startedAt}` : undefined,
+            result.finishedAt ? `  finished: ${result.finishedAt}` : undefined,
+            report
+              ? `  filesIndexed: ${report.filesIndexed ?? 0} symbols: ${report.symbolsCount ?? 0} edges: ${report.edgesCount ?? 0}`
+              : undefined,
+            result.error ? `  error: ${result.error}` : undefined
+          ]
+            .filter((line): line is string => Boolean(line))
+            .join("\n")
+          return { content: [{ type: "text", text }] }
+        }
+
         case "delete_project": {
           const args = Schema.decodeUnknownSync(DeleteProjectInput)(rawArgs ?? {})
           const deleted = await runtime.runPromise(
@@ -595,6 +653,27 @@ export const createMcpServer = <R>(
 
         case "index_repository": {
           const args = Schema.decodeUnknownSync(IndexRepositoryInput)(rawArgs ?? {})
+          if (args.async) {
+            const job = await runtime.runPromise(
+              Effect.gen(function* () {
+                const runner = yield* IndexJobRunner
+                return yield* runner.start({
+                  path: args.path,
+                  ...(args.name !== undefined ? { name: args.name } : {}),
+                  ...(args.force !== undefined ? { force: args.force } : {})
+                })
+              })
+            )
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `job ${job.id} status=${job.status} path=${job.path}`
+                }
+              ]
+            }
+          }
+
           const report = await runtime.runPromise(
             Effect.gen(function* () {
               const indexer = yield* Indexer
@@ -930,6 +1009,8 @@ export const startMcpServer = <R>(
     | Diagnostics
     | ChangeImpact
     | Indexer
+    | IndexJobs
+    | IndexJobRunner
     | FileSystem.FileSystem
     | Path.Path
     | R,

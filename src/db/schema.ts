@@ -210,6 +210,34 @@ export const initSchema = Effect.gen(function* () {
     )
   )
 
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS index_jobs (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      name TEXT,
+      force INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      started_at TEXT,
+      finished_at TEXT,
+      error TEXT,
+      repo_id TEXT,
+      report_json TEXT
+    );
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create index_jobs table", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_index_jobs_status ON index_jobs(status);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_index_jobs_status", cause: e })
+    )
+  )
+
   const ftsTables = yield* sql<{ name: string }>`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_fts';
   `.pipe(

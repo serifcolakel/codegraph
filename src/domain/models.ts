@@ -141,6 +141,24 @@ export const emptyParseCoverage = (): ParseCoverage => ({
   languages: {}
 })
 
+export const IndexJobStatus = Schema.Literal("queued", "running", "completed", "failed")
+export type IndexJobStatus = typeof IndexJobStatus.Type
+
+export const IndexJob = Schema.Struct({
+  id: Schema.String,
+  path: Schema.String,
+  force: Schema.Boolean,
+  status: IndexJobStatus,
+  createdAt: Schema.String,
+  name: Schema.optional(Schema.String),
+  startedAt: Schema.optional(Schema.String),
+  finishedAt: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
+  repoId: Schema.optional(Schema.String),
+  report: Schema.optional(Schema.Unknown)
+})
+export type IndexJob = typeof IndexJob.Type
+
 export const IndexReport = Schema.Struct({
   repoId: Schema.String,
   repoName: Schema.String,

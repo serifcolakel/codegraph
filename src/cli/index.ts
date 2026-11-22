@@ -13,6 +13,8 @@ import { FileWalkerLive } from "../services/FileWalker.js"
 import { GitChangesLive } from "../services/GitChanges.js"
 import { type GraphQuery, GraphQueryLive } from "../services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../services/Indexer.js"
+import { type IndexJobRunner, IndexJobRunnerLive } from "../services/IndexJobRunner.js"
+import { type IndexJobs, IndexJobsLive } from "../services/IndexJobs.js"
 import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
 import { ParserLive } from "../services/Parser.js"
 
@@ -187,6 +189,8 @@ const mcpCommand = Command.make("mcp", {}, () =>
       | Diagnostics
       | ChangeImpact
       | Indexer
+      | IndexJobs
+      | IndexJobRunner
       | FileSystem.FileSystem
       | Path.Path
     >()
@@ -226,6 +230,7 @@ export const MainLive = Layer.unwrapEffect(
       Layer.provide(Layer.mergeAll(StoreLive, QueryLive, GitChangesLive))
     )
     const WalkerLive = FileWalkerLive.pipe(Layer.provide(NodeContext.layer))
+    const IndexJobsServiceLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
     const IndexerServiceLive = IndexerLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, NodeContext.layer))
     )
@@ -237,6 +242,10 @@ export const MainLive = Layer.unwrapEffect(
       WalkerLive,
       ParserLive,
       IndexerServiceLive,
+      IndexJobsServiceLive,
+      IndexJobRunnerLive.pipe(
+        Layer.provide(Layer.mergeAll(IndexJobsServiceLive, IndexerServiceLive))
+      ),
       DiagnosticsServiceLive,
       ChangeImpactServiceLive,
       GitChangesLive,

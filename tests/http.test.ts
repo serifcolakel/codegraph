@@ -9,6 +9,8 @@ import { makeHttpRouter } from "../src/http/index.js"
 import { FileWalkerLive } from "../src/services/FileWalker.js"
 import { GraphQueryLive } from "../src/services/GraphQuery.js"
 import { Indexer, IndexerLive } from "../src/services/Indexer.js"
+import { IndexJobRunnerLive } from "../src/services/IndexJobRunner.js"
+import { IndexJobsLive } from "../src/services/IndexJobs.js"
 import { IndexStoreLive } from "../src/services/IndexStore.js"
 import { ParserLive } from "../src/services/Parser.js"
 
@@ -155,6 +157,44 @@ describe("HTTP API & visualization", () => {
               ).then((r) => r.status)
             )
             expect(deleteMissing).toBe(404)
+
+            // 12. Async indexing returns a job and exposes its status
+            const asyncDir = path.join(tmpDir, "async-repo")
+            yield* fs.makeDirectory(asyncDir, { recursive: true })
+            yield* fs.writeFileString(path.join(asyncDir, "async.ts"), "export const value = 1;")
+
+            const createdJob = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/index`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ path: asyncDir, name: "async-repo", async: true })
+              }).then((r) => r.json())
+            )
+            expect(createdJob.id).toMatch(/^job_/)
+            expect(["queued", "running"]).toContain(createdJob.status)
+
+            let asyncJob = createdJob
+            for (let attempt = 0; attempt < 100; attempt++) {
+              if (asyncJob.status === "completed" || asyncJob.status === "failed") break
+              yield* Effect.sleep("50 millis")
+              asyncJob = yield* Effect.tryPromise(() =>
+                fetch(`http://127.0.0.1:${TEST_PORT}/api/jobs/${createdJob.id}`).then((r) =>
+                  r.json()
+                )
+              )
+            }
+            expect(asyncJob.status).toBe("completed")
+            expect(asyncJob.repoId).toBeTruthy()
+
+            const jobsList = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/jobs?limit=5`).then((r) => r.json())
+            )
+            expect(jobsList.some((job: { id: string }) => job.id === createdJob.id)).toBe(true)
+
+            const missingJob = yield* Effect.tryPromise(() =>
+              fetch(`http://127.0.0.1:${TEST_PORT}/api/jobs/does-not-exist`).then((r) => r.status)
+            )
+            expect(missingJob).toBe(404)
           })
         )
       } finally {
@@ -166,12 +206,23 @@ describe("HTTP API & visualization", () => {
           const SqlLive = Sqlite.SqliteClient.layer({ filename: ":memory:" })
           const StoreLive = IndexStoreLive.pipe(Layer.provide(SqlLive))
           const QueryLive = GraphQueryLive.pipe(Layer.provide(SqlLive))
+          const JobsLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
           const PlatformLive = Layer.merge(NodeFileSystem.layer, NodePath.layer)
           const WalkerLive = FileWalkerLive.pipe(Layer.provide(PlatformLive))
           const IndexerTestLive = IndexerLive.pipe(
             Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, PlatformLive))
           )
-          return Layer.mergeAll(IndexerTestLive, StoreLive, QueryLive, PlatformLive)
+          const RunnerLive = IndexJobRunnerLive.pipe(
+            Layer.provide(Layer.mergeAll(JobsLive, IndexerTestLive))
+          )
+          return Layer.mergeAll(
+            IndexerTestLive,
+            StoreLive,
+            QueryLive,
+            JobsLive,
+            RunnerLive,
+            PlatformLive
+          )
         })()
       )
     )

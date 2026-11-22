@@ -11,19 +11,24 @@ import { NodeHttpServer } from "@effect/platform-node"
 import { Effect, Either, Schema } from "effect"
 import { GraphQuery } from "../services/GraphQuery.js"
 import { Indexer } from "../services/Indexer.js"
+import { IndexJobRunner } from "../services/IndexJobRunner.js"
+import { IndexJobs } from "../services/IndexJobs.js"
 import { IndexStore } from "../services/IndexStore.js"
 
 export const makeHttpRouter = Effect.gen(function* () {
   const store = yield* IndexStore
   const query = yield* GraphQuery
   const indexer = yield* Indexer
+  const jobs = yield* IndexJobs
+  const jobRunner = yield* IndexJobRunner
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
 
   const IndexRequest = Schema.Struct({
     path: Schema.String,
     name: Schema.optional(Schema.String),
-    force: Schema.optional(Schema.Boolean)
+    force: Schema.optional(Schema.Boolean),
+    async: Schema.optional(Schema.Boolean)
   })
 
   const ReindexRequest = Schema.Struct({
@@ -73,7 +78,38 @@ export const makeHttpRouter = Effect.gen(function* () {
       })
     ),
 
-    // 2. GET /api/coverage?repo= - parse coverage and unresolved diagnostics
+    // 2. GET /api/jobs - recent async indexing jobs
+    HttpRouter.get(
+      "/api/jobs",
+      Effect.gen(function* () {
+        const req = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(req.url, "http://localhost")
+        const limit = parseInt(url.searchParams.get("limit") ?? "20", 10)
+        const result = yield* jobs.listJobs(Number.isFinite(limit) ? limit : 20).pipe(Effect.either)
+        if (Either.isLeft(result)) {
+          return yield* HttpServerResponse.json({ error: result.left.message }, { status: 500 })
+        }
+        return yield* HttpServerResponse.json(result.right)
+      })
+    ),
+
+    // 3. GET /api/jobs/:id - async indexing job status
+    HttpRouter.get(
+      "/api/jobs/:id",
+      Effect.gen(function* () {
+        const params = yield* HttpRouter.schemaParams(Schema.Struct({ id: Schema.String }))
+        const job = yield* jobs.getJob(decodeURIComponent(params.id)).pipe(Effect.either)
+        if (Either.isLeft(job)) {
+          return yield* HttpServerResponse.json({ error: job.left.message }, { status: 500 })
+        }
+        if (!job.right) {
+          return yield* HttpServerResponse.json({ error: "Job not found." }, { status: 404 })
+        }
+        return yield* HttpServerResponse.json(job.right)
+      })
+    ),
+
+    // 4. GET /api/coverage?repo= - parse coverage and unresolved diagnostics
     HttpRouter.get(
       "/api/coverage",
       Effect.gen(function* () {
@@ -285,6 +321,15 @@ export const makeHttpRouter = Effect.gen(function* () {
           force: input.force ?? false,
           ...(input.name?.trim() ? { name: input.name.trim() } : {})
         }
+
+        if (input.async) {
+          const job = yield* jobRunner.start({ path: rootPath, ...options }).pipe(Effect.either)
+          if (Either.isLeft(job)) {
+            return yield* HttpServerResponse.json({ error: job.left.message }, { status: 500 })
+          }
+          return yield* HttpServerResponse.json(job.right, { status: 202 })
+        }
+
         const result = yield* indexer.indexRepo(rootPath, options).pipe(Effect.either)
         if (Either.isLeft(result)) {
           return yield* HttpServerResponse.json({ error: result.left.message }, { status: 500 })
