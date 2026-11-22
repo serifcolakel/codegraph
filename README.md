@@ -29,6 +29,8 @@ MCP server.
   enums and fields become typed symbols.
 - Cross-repository matching of HTTP routes and async channels
   (`cross_repo_links` MCP tool and `link` CLI command).
+- Freshness reporting (`freshness` CLI, `/api/freshness`, `index_status` MCP)
+  comparing on-disk hashes against the index.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Graph analytics: PageRank/in-degree/complexity ranking, package rankings,
@@ -129,6 +131,7 @@ configured ignore globs.
 | `GET /api/changes?repo=&base=`                  | Git change impact and blast radius          |
 | `GET /api/snapshots?repo=&limit=`               | Recent index snapshots                      |
 | `GET /api/snapshots/compare?repo=&from=&to=`    | Delta between two index runs                |
+| `GET /api/freshness?repo=`                      | Stale/added/modified/deleted file report    |
 | `GET /api/graph?repo=&level=file`               | File-level import/call graph                |
 | `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)             |
 | `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                         |

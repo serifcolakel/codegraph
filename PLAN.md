@@ -38,6 +38,7 @@ Implemented and verified:
   produce resolved `mentions` edges.
 - Cross-repository HTTP route and async channel matching into
   `cross_repo_edges`.
+- Freshness checks comparing disk hashes with the index (CLI, HTTP, MCP).
 - File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
@@ -65,7 +66,7 @@ Implemented and verified:
   `index_job_status`, `delete_project`, `list_projects`, `find_references`,
   `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
   `read_file_range`.
-- CLI: `index [--watch] [--force]`, `serve`, `stats`, `coverage`, `changes`, `link`, `mcp`.
+- CLI: `index [--watch] [--force]`, `serve`, `stats`, `coverage`, `freshness`, `changes`, `link`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
 ## Architecture Rules
@@ -160,7 +161,7 @@ Make the MCP server useful for real repository investigations.
 - [ ] Project-scoped databases or an explicit project namespace in one database.
 - [ ] Shared compressed graph artifact for team baselines.
 - [ ] Artifact import on first index, then incremental local updates.
-- [ ] Index freshness metadata and explicit stale/partial reporting.
+- [x] Index freshness metadata and explicit stale/partial reporting.
 - [ ] Optional daemon to own long-running watches and async jobs.
 - [ ] Configurable neighborhood and search limits.
 
