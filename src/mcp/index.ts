@@ -59,6 +59,26 @@ export const IndexStatusInput = Schema.Struct({
 })
 export type IndexStatusInput = typeof IndexStatusInput.Type
 
+export const GraphSchemaInput = Schema.Struct({
+  repoId: Schema.optional(Schema.String)
+})
+export type GraphSchemaInput = typeof GraphSchemaInput.Type
+
+export const CodeSnippetInput = Schema.Struct({
+  qualifiedName: Schema.String,
+  repoId: Schema.optional(Schema.String)
+})
+export type CodeSnippetInput = typeof CodeSnippetInput.Type
+
+export const SearchCodeInput = Schema.Struct({
+  query: Schema.String,
+  repoId: Schema.optional(Schema.String),
+  limit: Schema.optional(Schema.Number),
+  regex: Schema.optional(Schema.Boolean),
+  caseSensitive: Schema.optional(Schema.Boolean)
+})
+export type SearchCodeInput = typeof SearchCodeInput.Type
+
 export const createMcpServer = <R>(
   runtime: ManagedRuntime.ManagedRuntime<
     IndexStore | GraphQuery | Diagnostics | FileSystem.FileSystem | Path.Path | R,
@@ -154,6 +174,49 @@ export const createMcpServer = <R>(
               }
             },
             required: ["symbolId"]
+          }
+        },
+        {
+          name: "get_graph_schema",
+          description:
+            "Describes node labels, edge kinds and symbol properties, plus current index counts.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              repoId: { type: "string", description: "Optional repo ID" }
+            }
+          }
+        },
+        {
+          name: "get_code_snippet",
+          description:
+            "Returns the source lines for a symbol selected by qualified name, with file:line context.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              qualifiedName: {
+                type: "string",
+                description:
+                  "Qualified name from search_graph, e.g. src.domain.languages.languageForPath"
+              },
+              repoId: { type: "string", description: "Optional repo ID" }
+            },
+            required: ["qualifiedName"]
+          }
+        },
+        {
+          name: "search_code",
+          description: "Searches text inside indexed files and returns compact file:line matches.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              query: { type: "string", description: "Literal text, or a regex when regex=true" },
+              repoId: { type: "string", description: "Optional repo ID" },
+              limit: { type: "number", description: "Max matches (default 50, max 200)" },
+              regex: { type: "boolean", description: "Treat query as a regular expression" },
+              caseSensitive: { type: "boolean", description: "Case-sensitive matching" }
+            },
+            required: ["query"]
           }
         },
         {
@@ -302,6 +365,123 @@ export const createMcpServer = <R>(
             .join("\n")
           const output = `Nodes (${graph.nodes.length}):\n${nodesText}\n\nEdges (${graph.edges.length}):\n${edgesText}`
           return { content: [{ type: "text", text: output }] }
+        }
+
+        case "get_graph_schema": {
+          const args = Schema.decodeUnknownSync(GraphSchemaInput)(rawArgs ?? {})
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const store = yield* IndexStore
+              const repoId = yield* getTargetRepoId(args.repoId)
+              const repo = yield* store.getRepo(repoId)
+              const stats = yield* store.getStats(repoId)
+              return [
+                "Node labels: Repository, File, Symbol (function, class, interface, type, enum, method, property, const), Package",
+                "Edge kinds: import, imports (file-level), defines, contains, call, call_reference, usage, reference, extends, implements, throws, raises",
+                "Symbol properties: id, name, qualifiedName, kind, language, visibility, containerName, startLine, endLine, signature, doc, exported, inDegree",
+                "File edge table: srcFileId -> dstFileId (imports), with unresolved specifiers retained",
+                `Repository: ${repo?.name ?? repoId} files=${stats.files} symbols=${stats.symbols} edges=${stats.edges}`
+              ].join("\n")
+            })
+          )
+          return { content: [{ type: "text", text }] }
+        }
+
+        case "get_code_snippet": {
+          const args = Schema.decodeUnknownSync(CodeSnippetInput)(rawArgs ?? {})
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const query = yield* GraphQuery
+              const store = yield* IndexStore
+              const fs = yield* FileSystem.FileSystem
+              const path = yield* Path.Path
+              const repoId = yield* getTargetRepoId(args.repoId)
+
+              const symbol = yield* query.getSymbolByQualifiedName(args.qualifiedName, repoId)
+              if (!symbol) {
+                return `No symbol matched qualified name "${args.qualifiedName}".`
+              }
+
+              const repo = yield* store.getRepo(repoId)
+              if (!repo) return `Repository not found: ${repoId}`
+
+              const absolutePath = path.isAbsolute(symbol.filePath)
+                ? symbol.filePath
+                : path.join(repo.rootPath, symbol.filePath)
+              const exists = yield* fs.exists(absolutePath).pipe(Effect.orElseSucceed(() => false))
+              if (!exists) return `File not found on disk: ${symbol.filePath}`
+
+              const content = yield* fs.readFileString(absolutePath)
+              const lines = content.split("\n")
+              const start = Math.max(1, symbol.startLine)
+              const end = Math.min(lines.length, symbol.endLine, start + 399)
+              const body = lines
+                .slice(start - 1, end)
+                .map((line, index) => `${start + index} | ${line}`)
+                .join("\n")
+
+              const header = [
+                `${symbol.kind} ${symbol.name} — ${symbol.filePath}:${symbol.startLine}-${symbol.endLine}`,
+                `signature: ${symbol.signature}`,
+                symbol.doc ? `doc: ${docSnippet(symbol.doc)}` : undefined
+              ]
+                .filter((line): line is string => Boolean(line))
+                .join("\n")
+              return `${header}\n${body}`
+            })
+          )
+          return { content: [{ type: "text", text }] }
+        }
+
+        case "search_code": {
+          const args = Schema.decodeUnknownSync(SearchCodeInput)(rawArgs ?? {})
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const store = yield* IndexStore
+              const fs = yield* FileSystem.FileSystem
+              const path = yield* Path.Path
+              const repoId = yield* getTargetRepoId(args.repoId)
+              const repo = yield* store.getRepo(repoId)
+              if (!repo) return `Repository not found: ${repoId}`
+
+              const limit = Math.max(1, Math.min(200, args.limit ?? 50))
+              const files = yield* store.getFiles(repoId)
+              const paths = Array.from(files.values())
+                .map((file) => file.path)
+                .sort()
+
+              const matcher = args.regex
+                ? (line: string) => new RegExp(args.query, args.caseSensitive ? "" : "i").test(line)
+                : (line: string) =>
+                    (args.caseSensitive ? line : line.toLowerCase()).includes(
+                      args.caseSensitive ? args.query : args.query.toLowerCase()
+                    )
+
+              const matches: string[] = []
+              for (const filePath of paths) {
+                if (matches.length >= limit) break
+                const absolutePath = path.isAbsolute(filePath)
+                  ? filePath
+                  : path.join(repo.rootPath, filePath)
+                const content = yield* fs
+                  .readFileString(absolutePath)
+                  .pipe(Effect.orElseSucceed(() => undefined))
+                if (content === undefined || content.length > 1_000_000) continue
+
+                const lines = content.split("\n")
+                for (let index = 0; index < lines.length && matches.length < limit; index++) {
+                  const line = lines[index] ?? ""
+                  if (!matcher(line)) continue
+                  matches.push(`${filePath}:${index + 1}: ${line.trim().slice(0, 240)}`)
+                }
+              }
+
+              return matches.length > 0
+                ? matches.join("\n")
+                : `No matches for "${args.query}" in ${repo.name}.`
+            })
+          )
+          return { content: [{ type: "text", text }] }
         }
 
         case "index_status": {

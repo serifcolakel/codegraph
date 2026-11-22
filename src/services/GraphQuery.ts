@@ -22,6 +22,11 @@ export interface GraphQuery {
 
   readonly getSymbol: (symbolId: string) => Effect.Effect<SymbolDetails, StoreError | NotFoundError>
 
+  readonly getSymbolByQualifiedName: (
+    qualifiedName: string,
+    repoId?: string
+  ) => Effect.Effect<SymbolWithFile | null, StoreError>
+
   readonly findReferences: (
     symbolId: string
   ) => Effect.Effect<readonly ReferenceResult[], StoreError>
@@ -245,6 +250,81 @@ export const GraphQueryLive = Layer.effect(
           exported: r.exported === 1,
           inDegree: r.inDegree
         }))
+      })
+
+    const getSymbolByQualifiedName = (
+      qualifiedName: string,
+      repoId?: string
+    ): Effect.Effect<SymbolWithFile | null, StoreError> =>
+      Effect.gen(function* () {
+        const rows = yield* (
+          repoId
+            ? sql<{
+                id: string
+                name: string
+                kind: SymbolKind
+                fileId: string
+                filePath: string
+                startLine: number
+                endLine: number
+                signature: string
+                exported: number
+                doc: string
+                inDegree: number
+              }>`
+                SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
+                       s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
+                       (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+                FROM symbols s
+                JOIN files f ON s.file_id = f.id
+                WHERE f.repo_id = ${repoId}
+                  AND (s.qualified_name = ${qualifiedName} OR s.name = ${qualifiedName})
+                ORDER BY CASE WHEN s.qualified_name = ${qualifiedName} THEN 0 ELSE 1 END
+                LIMIT 1;
+              `
+            : sql<{
+                id: string
+                name: string
+                kind: SymbolKind
+                fileId: string
+                filePath: string
+                startLine: number
+                endLine: number
+                signature: string
+                exported: number
+                doc: string
+                inDegree: number
+              }>`
+                SELECT s.id, s.name, s.kind, s.file_id as fileId, f.path as filePath,
+                       s.start_line as startLine, s.end_line as endLine, s.signature, s.exported, s.doc,
+                       (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+                FROM symbols s
+                JOIN files f ON s.file_id = f.id
+                WHERE s.qualified_name = ${qualifiedName} OR s.name = ${qualifiedName}
+                ORDER BY CASE WHEN s.qualified_name = ${qualifiedName} THEN 0 ELSE 1 END
+                LIMIT 1;
+              `
+        ).pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Qualified name lookup failed", cause: e })
+          )
+        )
+
+        const row = rows[0]
+        if (!row) return null
+        return {
+          id: row.id,
+          name: row.name,
+          kind: row.kind,
+          fileId: row.fileId,
+          filePath: row.filePath,
+          startLine: row.startLine,
+          endLine: row.endLine,
+          signature: row.signature,
+          doc: row.doc,
+          exported: row.exported === 1,
+          inDegree: row.inDegree
+        }
       })
 
     const getSymbol = (
@@ -805,6 +885,7 @@ export const GraphQueryLive = Layer.effect(
     return {
       searchSymbols,
       getSymbol,
+      getSymbolByQualifiedName,
       findReferences,
       outlineFile,
       neighborhood,

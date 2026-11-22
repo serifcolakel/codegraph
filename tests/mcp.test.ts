@@ -76,6 +76,9 @@ export class MemoryDataService implements DataService {
         expect(toolNames).toContain("neighborhood")
         expect(toolNames).toContain("read_file_range")
         expect(toolNames).toContain("index_status")
+        expect(toolNames).toContain("get_graph_schema")
+        expect(toolNames).toContain("get_code_snippet")
+        expect(toolNames).toContain("search_code")
 
         const callToolHandler = handlers.get(CallToolRequestSchema.shape.method.value)
         if (!callToolHandler) throw new Error("call tool handler not registered")
@@ -108,7 +111,34 @@ export class MemoryDataService implements DataService {
         expect(statusResult.content[0]?.text).toContain("coverage:")
         expect(statusResult.content[0]?.text).toContain("unresolved edges:")
 
-        // 6. Test read_file_range
+        // 6. Test get_graph_schema
+        const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
+        expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
+        expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
+
+        // 7. Test get_code_snippet by qualified name
+        const snippetResult = yield* callTool("get_code_snippet", {
+          qualifiedName: "service.MemoryDataService",
+          repoId: report.repoId
+        })
+        expect(snippetResult.content[0]?.text).toContain("service.ts:")
+        expect(snippetResult.content[0]?.text).toContain("MemoryDataService")
+        expect(snippetResult.content[0]?.text).toContain("getData")
+
+        const missingSnippet = yield* callTool("get_code_snippet", {
+          qualifiedName: "service.DoesNotExist",
+          repoId: report.repoId
+        })
+        expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
+
+        // 8. Test search_code
+        const searchCodeResult = yield* callTool("search_code", {
+          query: "MemoryDataService",
+          repoId: report.repoId
+        })
+        expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
+
+        // 9. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
