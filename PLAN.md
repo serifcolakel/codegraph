@@ -39,6 +39,7 @@ Implemented and verified:
 - Cross-repository HTTP route and async channel matching into
   `cross_repo_edges`.
 - Freshness checks comparing disk hashes with the index (CLI, HTTP, MCP).
+- Debounced watch mode and configurable search/neighborhood/depth limits.
 - File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
@@ -157,13 +158,13 @@ Make the MCP server useful for real repository investigations.
 
 ### Phase 6 — Operations and distribution (P2)
 
-- [ ] Background watcher with debounced incremental indexing.
-- [ ] Project-scoped databases or an explicit project namespace in one database.
+- [x] Background watcher with debounced incremental indexing.
+- [x] Project-scoped databases (`CODEGRAPH_DB_PATH`) and explicit repo namespaces in one database.
 - [ ] Shared compressed graph artifact for team baselines.
 - [ ] Artifact import on first index, then incremental local updates.
 - [x] Index freshness metadata and explicit stale/partial reporting.
 - [ ] Optional daemon to own long-running watches and async jobs.
-- [ ] Configurable neighborhood and search limits.
+- [x] Configurable neighborhood, search and depth limits.
 
 ### Phase 7 — UI (P2)
 

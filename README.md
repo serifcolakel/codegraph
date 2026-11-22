@@ -55,7 +55,8 @@ MCP server.
   packages, dead code, cycles, change impact and snapshot deltas, with
   click-through to the graph.
 - HTTP JSON API and an MCP stdio server.
-- Optional watch mode that re-indexes on change (debounced).
+- Optional watch mode that re-indexes on change (debounced); search,
+  neighborhood and depth limits are configurable.
 
 ## Requirements
 
@@ -110,12 +111,16 @@ node dist/cli/index.js index ./some-repo
 
 All settings are read from environment variables:
 
-| Variable                 | Default             | Description                  |
-| ------------------------ | ------------------- | ---------------------------- |
-| `CODEGRAPH_DB_PATH`      | `.codegraph.sqlite` | SQLite database path         |
-| `CODEGRAPH_CONCURRENCY`  | `4`                 | Parallel file parsing limit  |
-| `CODEGRAPH_IGNORE_GLOBS` | common build dirs   | Comma-separated ignore globs |
-| `CODEGRAPH_PORT`         | `4310`              | HTTP server port             |
+| Variable                       | Default             | Description                  |
+| ------------------------------ | ------------------- | ---------------------------- |
+| `CODEGRAPH_DB_PATH`            | `.codegraph.sqlite` | SQLite database path         |
+| `CODEGRAPH_CONCURRENCY`        | `4`                 | Parallel file parsing limit  |
+| `CODEGRAPH_IGNORE_GLOBS`       | common build dirs   | Comma-separated ignore globs |
+| `CODEGRAPH_PORT`               | `4310`              | HTTP server port             |
+| `CODEGRAPH_WATCH_DEBOUNCE_MS`  | `500`               | Watch-mode debounce          |
+| `CODEGRAPH_SEARCH_LIMIT`       | `50`                | Max symbols per search       |
+| `CODEGRAPH_NEIGHBORHOOD_LIMIT` | `500`               | Max neighborhood nodes       |
+| `CODEGRAPH_MAX_DEPTH`          | `8`                 | Max graph/trace depth        |
 
 `.gitignore` files in the indexed repository are respected, in addition to the
 configured ignore globs.
