@@ -24,8 +24,9 @@ MCP server.
   manifests (`package.json`, `go.mod`, `Cargo.toml`, `pyproject.toml`) with
   ambiguity protection and explicit unresolved edges.
 - FTS5 symbol search plus a ranked repository map.
-- Static HTML/Cytoscape.js visualization (no frontend build step) with dark and
-  light themes, deep links, callers/callees, type filters and view history.
+- Static HTML/Cytoscape.js visualization (no frontend build step) with a left
+  icon dock (tooltips), compact repo/search/depth overlay, dark and light
+  themes, deep links, callers/callees, type filters and view history.
 - Repository metadata stat cards in the UI: last index time, index duration,
   source size, file/symbol/edge counts. An **Index details** dialog shows
   languages, parse coverage, import resolution and recent indexing jobs.

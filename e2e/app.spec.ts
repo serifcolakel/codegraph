@@ -55,6 +55,7 @@ test.describe("CodeGraph web UI", () => {
   })
 
   test("renders the file graph with view stats", async ({ page }) => {
+    await expect(page.getByTestId("dock")).toBeVisible()
     await expect(page.getByTestId("view-mode")).toHaveText("File graph")
     await expect(page.getByTestId("graph-canvas")).toBeVisible()
 
