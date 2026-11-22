@@ -181,7 +181,13 @@ const mcpCommand = Command.make("mcp", {}, () =>
     const store = yield* IndexStore
     yield* store.initSchema()
     const runtime = yield* Effect.runtime<
-      IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path
+      | IndexStore
+      | GraphQuery
+      | Diagnostics
+      | ChangeImpact
+      | Indexer
+      | FileSystem.FileSystem
+      | Path.Path
     >()
     const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
     yield* Effect.promise(() => startMcpServer(managedRuntime))

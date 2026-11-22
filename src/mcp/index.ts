@@ -11,6 +11,7 @@ import { Effect, type ManagedRuntime, Schema } from "effect"
 import { ChangeImpact } from "../services/ChangeImpact.js"
 import { Diagnostics, formatStatus } from "../services/Diagnostics.js"
 import { GraphQuery } from "../services/GraphQuery.js"
+import { Indexer } from "../services/Indexer.js"
 import { IndexStore } from "../services/IndexStore.js"
 
 const docSnippet = (doc?: string): string =>
@@ -74,6 +75,13 @@ export type CodeSnippetInput = typeof CodeSnippetInput.Type
 export const ListProjectsInput = Schema.Struct({})
 export type ListProjectsInput = typeof ListProjectsInput.Type
 
+export const IndexRepositoryInput = Schema.Struct({
+  path: Schema.String,
+  name: Schema.optional(Schema.String),
+  force: Schema.optional(Schema.Boolean)
+})
+export type IndexRepositoryInput = typeof IndexRepositoryInput.Type
+
 export const DetectChangesInput = Schema.Struct({
   repoId: Schema.optional(Schema.String),
   base: Schema.optional(Schema.String)
@@ -119,7 +127,14 @@ export type SearchCodeInput = typeof SearchCodeInput.Type
 
 export const createMcpServer = <R>(
   runtime: ManagedRuntime.ManagedRuntime<
-    IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path | R,
+    | IndexStore
+    | GraphQuery
+    | Diagnostics
+    | ChangeImpact
+    | Indexer
+    | FileSystem.FileSystem
+    | Path.Path
+    | R,
     unknown
   >
 ) => {
@@ -209,6 +224,20 @@ export const createMcpServer = <R>(
             properties: {
               repoId: { type: "string", description: "Optional repo ID" }
             }
+          }
+        },
+        {
+          name: "index_repository",
+          description:
+            "Indexes a local repository path into the current database (incremental unless force=true).",
+          inputSchema: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Absolute or relative repository path" },
+              name: { type: "string", description: "Optional display name" },
+              force: { type: "boolean", description: "Reparse every file even if unchanged" }
+            },
+            required: ["path"]
           }
         },
         {
@@ -528,6 +557,26 @@ export const createMcpServer = <R>(
           return { content: [{ type: "text", text }] }
         }
 
+        case "index_repository": {
+          const args = Schema.decodeUnknownSync(IndexRepositoryInput)(rawArgs ?? {})
+          const report = await runtime.runPromise(
+            Effect.gen(function* () {
+              const indexer = yield* Indexer
+              return yield* indexer.indexRepo(args.path, {
+                ...(args.name !== undefined ? { name: args.name } : {}),
+                ...(args.force !== undefined ? { force: args.force } : {})
+              })
+            })
+          )
+          const text = [
+            `indexed ${report.repoName} (${report.repoId})`,
+            `  files indexed=${report.filesIndexed} skipped=${report.filesSkipped} deleted=${report.filesDeleted}`,
+            `  symbols=${report.symbolsCount} edges=${report.edgesCount} duration=${report.durationMs}ms`,
+            `  coverage: parsed=${report.coverage.parsed} partial=${report.coverage.partial} unsupported=${report.coverage.unsupported} unknown=${report.coverage.unknown}`
+          ].join("\n")
+          return { content: [{ type: "text", text }] }
+        }
+
         case "list_projects": {
           const text = await runtime.runPromise(
             Effect.gen(function* () {
@@ -840,7 +889,14 @@ export const createMcpServer = <R>(
 
 export const startMcpServer = <R>(
   runtime: ManagedRuntime.ManagedRuntime<
-    IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path | R,
+    | IndexStore
+    | GraphQuery
+    | Diagnostics
+    | ChangeImpact
+    | Indexer
+    | FileSystem.FileSystem
+    | Path.Path
+    | R,
     unknown
   >
 ) => {

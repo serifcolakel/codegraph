@@ -59,7 +59,13 @@ export function top(): string {
 
         // Create runtime and MCP server
         const runtime = yield* Effect.runtime<
-          IndexStore | GraphQuery | Diagnostics | ChangeImpact | FileSystem.FileSystem | Path.Path
+          | IndexStore
+          | GraphQuery
+          | Diagnostics
+          | ChangeImpact
+          | Indexer
+          | FileSystem.FileSystem
+          | Path.Path
         >()
         const managedRuntime = ManagedRuntime.make(Layer.succeedContext(runtime.context))
         const mcpServer = createMcpServer(managedRuntime)
@@ -94,6 +100,7 @@ export function top(): string {
         expect(toolNames).toContain("get_code_snippet")
         expect(toolNames).toContain("search_code")
         expect(toolNames).toContain("list_projects")
+        expect(toolNames).toContain("index_repository")
         expect(toolNames).toContain("search_graph")
         expect(toolNames).toContain("get_architecture")
         expect(toolNames).toContain("trace_path")
@@ -158,12 +165,21 @@ export function top(): string {
         expect(architectureResult.content[0]?.text).toContain("hotspots:")
         expect(architectureResult.content[0]?.text).toContain("service.ts")
 
-        // 9. Test list_projects
+        // 9. Test index_repository
+        const reindexResult = yield* callTool("index_repository", {
+          path: tmpDir,
+          name: "mcp-test-repo",
+          force: true
+        })
+        expect(reindexResult.content[0]?.text).toContain("indexed mcp-test-repo")
+        expect(reindexResult.content[0]?.text).toContain("coverage:")
+
+        // 10. Test list_projects
         const projectsResult = yield* callTool("list_projects", {})
         expect(projectsResult.content[0]?.text).toContain("mcp-test-repo")
         expect(projectsResult.content[0]?.text).toContain(report.repoId)
 
-        // 10. Test search_graph with regex, kind filter and paging
+        // 11. Test search_graph with regex, kind filter and paging
         const graphSearch = yield* callTool("search_graph", {
           namePattern: "Memory.*",
           regex: true,
@@ -182,12 +198,12 @@ export function top(): string {
         })
         expect(graphSearchPage.content[0]?.text).toContain("Showing 1 of")
 
-        // 11. Test get_graph_schema
+        // 12. Test get_graph_schema
         const schemaResult = yield* callTool("get_graph_schema", { repoId: report.repoId })
         expect(schemaResult.content[0]?.text).toContain("Edge kinds:")
         expect(schemaResult.content[0]?.text).toContain("Symbol properties:")
 
-        // 12. Test get_code_snippet by qualified name
+        // 13. Test get_code_snippet by qualified name
         const snippetResult = yield* callTool("get_code_snippet", {
           qualifiedName: "service.MemoryDataService",
           repoId: report.repoId
@@ -202,14 +218,14 @@ export function top(): string {
         })
         expect(missingSnippet.content[0]?.text).toContain("No symbol matched")
 
-        // 13. Test search_code
+        // 14. Test search_code
         const searchCodeResult = yield* callTool("search_code", {
           query: "MemoryDataService",
           repoId: report.repoId
         })
         expect(searchCodeResult.content[0]?.text).toContain("service.ts:")
 
-        // 14. Test read_file_range
+        // 15. Test read_file_range
         const readRangeResult = yield* callTool("read_file_range", {
           path: "service.ts",
           startLine: 1,
