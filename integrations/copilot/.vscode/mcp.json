@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/codegraph/dist/cli/index.js", "mcp"],
+      "env": {
+        "CODEGRAPH_DB_PATH": "/absolute/path/to/codegraph/.codegraph.sqlite"
+      }
+    }
+  }
+}

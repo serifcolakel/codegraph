@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "codegraph: auto-index",
+      "type": "shell",
+      "command": "node",
+      "args": [
+        "/absolute/path/to/codegraph/scripts/codegraph-auto-index.mjs",
+        "--path",
+        "${workspaceFolder}",
+        "--debounce-ms",
+        "1500",
+        "--quiet"
+      ],
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

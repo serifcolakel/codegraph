@@ -1,0 +1,5 @@
+#!/bin/sh
+# Installed by integrations/git-hooks/install.sh
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -n "$root" ] || exit 0
+node /absolute/path/to/codegraph/scripts/codegraph-auto-index.mjs --path "$root" --debounce-ms 1000 --quiet >/dev/null 2>&1 || true

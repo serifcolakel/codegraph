@@ -40,6 +40,8 @@ Implemented and verified:
   `cross_repo_edges`.
 - Freshness checks comparing disk hashes with the index (CLI, HTTP, MCP).
 - Debounced watch mode and configurable search/neighborhood/depth limits.
+- Agent integration: repo skill and auto-index hooks for Claude Code, Codex,
+  Copilot, opencode and git.
 - File walker honors root and nested `.gitignore` files.
 - Route nodes for Next.js, Express and FastAPI linked to handler symbols.
 - ADR `decision` nodes, Docker/Compose/Kubernetes/Helm `config` nodes,
@@ -122,7 +124,7 @@ Make the MCP server useful for real repository investigations.
 - [x] `detect_changes` from git diff to affected symbols and blast radius.
 - [x] `query_graph` exposing a safe read-only Cypher-like subset.
 - [x] `search_code` restricted to indexed files.
-- [ ] Keep outputs compact, paged and token-efficient; always include `file:line`.
+- [x] Keep outputs compact, paged and token-efficient; always include `file:line`.
 - [x] Add async indexing with a job status endpoint for long repositories.
 
 ### Phase 3 — Analytics and impact (P1)
@@ -165,12 +167,13 @@ Make the MCP server useful for real repository investigations.
 - [x] Index freshness metadata and explicit stale/partial reporting.
 - [ ] Optional daemon to own long-running watches and async jobs.
 - [x] Configurable neighborhood, search and depth limits.
+- [x] Agent integration skill and automatic index hooks (Claude Code, Codex, Copilot, opencode, git).
 
 ### Phase 7 — UI (P2)
 
-- [ ] Architecture view with packages, entry points, clusters and dependencies.
-- [ ] Hotspot and dead-code views with source evidence.
-- [ ] Change-impact view driven by git diff.
+- [x] Architecture view with packages, entry points, clusters and dependencies (Insights).
+- [x] Hotspot, complexity and dead-code views with source evidence (Insights).
+- [x] Change-impact view driven by git diff (Insights).
 - [ ] Project management: add, rename, delete and inspect coverage.
 - [ ] Graph minimap and saved views.
 - [ ] Keep the frontend static and build-step-free unless explicitly requested.

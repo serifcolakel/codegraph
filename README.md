@@ -269,11 +269,24 @@ Use one server entry per database if you index several repositories (for example
 relative to its own package, so neither `serve` nor `mcp` depends on the
 current working directory.
 
+## Agent integrations
+
+- Repo skill: [`.claude/skills/codegraph/SKILL.md`](.claude/skills/codegraph/SKILL.md)
+- Auto-index helper: [`scripts/codegraph-auto-index.mjs`](scripts/codegraph-auto-index.mjs)
+- Setup samples: [`integrations/README.md`](integrations/README.md)
+
+The samples cover Claude Code (`.mcp.json` + `SessionStart`/`PostToolUse` hooks),
+Codex (`config.toml` + `AGENTS.md`), Copilot (`.vscode/mcp.json` + folder-open
+task), opencode (`opencode.json` + plugin) and universal git hooks. All paths
+are local; set `CODEGRAPH_DB_PATH` to share one database.
+
 ## Project layout
 
 ```
 src/
   cli/        @effect/cli commands
+  ../integrations  Agent MCP/hook samples
+  ../scripts  codegraph-auto-index hook helper
   db/         SQLite schema and FTS5 setup
   domain/     Schema models, typed errors, configuration
   http/       HTTP API and static UI serving

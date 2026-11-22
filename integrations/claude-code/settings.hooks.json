@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/codegraph/scripts/codegraph-auto-index.mjs --path \"$CLAUDE_PROJECT_DIR\" --quiet"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/codegraph/scripts/codegraph-auto-index.mjs --path \"$CLAUDE_PROJECT_DIR\" --debounce-ms 1500 --quiet"
+          }
+        ]
+      }
+    ]
+  }
+}
