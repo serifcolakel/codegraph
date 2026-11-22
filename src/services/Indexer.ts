@@ -1,5 +1,5 @@
 import { FileSystem, Path } from "@effect/platform"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schedule } from "effect"
 import { appConfig } from "../domain/config.js"
 import { type ParseError, type StoreError, WalkError } from "../domain/errors.js"
 import type { FileScanResult, IndexReport } from "../domain/models.js"
@@ -108,13 +108,18 @@ export const IndexerLive = Layer.effect(
               )
 
               const parsed = yield* parser.parse(scanned.path, content)
-              yield* store.saveFileIndex(
-                repo.id,
-                scanned.path,
-                scanned.hash,
-                scanned.sizeBytes,
-                parsed
-              )
+              yield* store
+                .saveFileIndex(repo.id, scanned.path, scanned.hash, scanned.sizeBytes, parsed)
+                .pipe(
+                  Effect.retry({
+                    times: 2,
+                    schedule: Schedule.exponential("150 millis"),
+                    while: (error) =>
+                      /locked|busy|busy_timeout/i.test(
+                        `${error.message} ${String((error as { cause?: { message?: string } }).cause?.message ?? "")}`
+                      )
+                  })
+                )
             }),
           { concurrency: config.concurrency }
         ).pipe(Effect.withSpan("Indexer.parseAndStoreFiles"))

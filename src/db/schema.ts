@@ -129,7 +129,19 @@ export const initSchema = Effect.gen(function* () {
     ["language", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.language column"],
     ["qualified_name", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.qualified_name column"],
     ["visibility", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.visibility column"],
-    ["container_name", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.container_name column"]
+    ["container_name", "TEXT NOT NULL DEFAULT ''", "Failed to add symbols.container_name column"],
+    ["cyclomatic", "INTEGER NOT NULL DEFAULT 1", "Failed to add symbols.cyclomatic column"],
+    ["cognitive", "INTEGER NOT NULL DEFAULT 1", "Failed to add symbols.cognitive column"],
+    ["loop_depth", "INTEGER NOT NULL DEFAULT 0", "Failed to add symbols.loop_depth column"],
+    ["loop_count", "INTEGER NOT NULL DEFAULT 0", "Failed to add symbols.loop_count column"],
+    [
+      "linear_scan_in_loop",
+      "INTEGER NOT NULL DEFAULT 0",
+      "Failed to add symbols.linear_scan_in_loop column"
+    ],
+    ["alloc_in_loop", "INTEGER NOT NULL DEFAULT 0", "Failed to add symbols.alloc_in_loop column"],
+    ["recursive", "INTEGER NOT NULL DEFAULT 0", "Failed to add symbols.recursive column"],
+    ["param_count", "INTEGER NOT NULL DEFAULT 0", "Failed to add symbols.param_count column"]
   ]
   for (const [name, definition, message] of symbolMigrations) {
     if (symbolColumnNames.has(name)) continue

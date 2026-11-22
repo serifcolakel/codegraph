@@ -164,7 +164,15 @@ class FundService:
           "language",
           "qualified_name",
           "visibility",
-          "container_name"
+          "container_name",
+          "cyclomatic",
+          "cognitive",
+          "loop_depth",
+          "loop_count",
+          "linear_scan_in_loop",
+          "alloc_in_loop",
+          "recursive",
+          "param_count"
         ])
       )
 

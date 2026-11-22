@@ -19,6 +19,14 @@ const PARSE_STATUSES: ReadonlySet<string> = new Set(["parsed", "partial", "skipp
 
 const isParseStatus = (value: string): value is ParseStatus => PARSE_STATUSES.has(value)
 
+const errorMessage = (error: unknown): string => {
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === "string") return message
+  }
+  return String(error)
+}
+
 export interface StoredRawEdge {
   readonly id: string
   readonly fileId: string
@@ -378,9 +386,17 @@ export const IndexStoreLive = Layer.effect(
 
               // Insert symbols
               const nameToSymbolId = new Map<string, string>()
+              const usedSymbolIds = new Set<string>()
 
               for (const sym of parsed.symbols) {
-                const symbolId = `${fileId}#${sym.name}:${sym.startLine}`
+                const baseSymbolId = `${fileId}#${sym.name}:${sym.startLine}`
+                let symbolId = baseSymbolId
+                let duplicateIndex = 2
+                while (usedSymbolIds.has(symbolId)) {
+                  symbolId = `${baseSymbolId}~${duplicateIndex}`
+                  duplicateIndex += 1
+                }
+                usedSymbolIds.add(symbolId)
                 nameToSymbolId.set(sym.name, symbolId)
                 const qualifiedName = qualifyName(filePath, sym.name, sym.containerName)
 
@@ -472,7 +488,10 @@ export const IndexStoreLive = Layer.effect(
           .pipe(
             Effect.mapError(
               (e) =>
-                new StoreError({ message: `Failed to save file index for ${filePath}`, cause: e })
+                new StoreError({
+                  message: `Failed to save file index for ${filePath}: ${errorMessage(e)}`,
+                  cause: e
+                })
             )
           )
       })
