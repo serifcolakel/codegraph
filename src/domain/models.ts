@@ -44,7 +44,8 @@ export const EdgeKind = Schema.Literal(
   "raises",
   "mentions",
   "publishes",
-  "subscribes"
+  "subscribes",
+  "similar_to"
 )
 export type EdgeKind = typeof EdgeKind.Type
 

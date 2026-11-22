@@ -127,11 +127,13 @@ export const AnalyzeGraphInput = Schema.Struct({
     "dead_code",
     "cycles",
     "communities",
-    "packages"
+    "packages",
+    "duplicates"
   ),
   repoId: Schema.optional(Schema.String),
   level: Schema.optional(Schema.Literal("symbol", "file", "package")),
-  limit: Schema.optional(Schema.Number)
+  limit: Schema.optional(Schema.Number),
+  threshold: Schema.optional(Schema.Number)
 })
 export type AnalyzeGraphInput = typeof AnalyzeGraphInput.Type
 
@@ -180,7 +182,8 @@ export const SearchGraphInput = Schema.Struct({
   minDegree: Schema.optional(Schema.Number),
   maxDegree: Schema.optional(Schema.Number),
   limit: Schema.optional(Schema.Number),
-  offset: Schema.optional(Schema.Number)
+  offset: Schema.optional(Schema.Number),
+  semantic: Schema.optional(Schema.Boolean)
 })
 export type SearchGraphInput = typeof SearchGraphInput.Type
 
@@ -365,7 +368,11 @@ export const createMcpServer = <R>(
                 enum: ["symbol", "file", "package"],
                 description: "Cycle/community level"
               },
-              limit: { type: "number", description: "Max results (default varies, max 200)" }
+              limit: { type: "number", description: "Max results (default varies, max 200)" },
+              threshold: {
+                type: "number",
+                description: "Duplicate similarity threshold (default 0.8)"
+              }
             },
             required: ["analysis"]
           }
@@ -443,7 +450,11 @@ export const createMcpServer = <R>(
               minDegree: { type: "number", description: "Minimum in-degree" },
               maxDegree: { type: "number", description: "Maximum in-degree" },
               limit: { type: "number", description: "Page size (default 20, max 200)" },
-              offset: { type: "number", description: "Result offset for paging" }
+              offset: { type: "number", description: "Result offset for paging" },
+              semantic: {
+                type: "boolean",
+                description: "Hybrid BM25 + vector similarity ranking for namePattern"
+              }
             }
           }
         },
@@ -863,6 +874,21 @@ export const createMcpServer = <R>(
                 return `${header}\n${groups.length} cycle(s)\n\n${body}`
               }
 
+              if (args.analysis === "duplicates") {
+                const pairs = yield* analytics.duplicates(repoId, {
+                  ...(args.threshold !== undefined ? { threshold: args.threshold } : {}),
+                  ...(args.limit !== undefined ? { limit: args.limit } : {})
+                })
+                if (pairs.length === 0) return `${header}\nNo near-duplicates found.`
+                const body = pairs
+                  .map(
+                    (pair) =>
+                      `${pair.similarity} ${pair.left.name} (${pair.left.filePath}:${pair.left.startLine}) ~ ${pair.right.name} (${pair.right.filePath}:${pair.right.startLine})`
+                  )
+                  .join("\n")
+                return `${header}\n${pairs.length} pair(s)\n\n${body}`
+              }
+
               if (args.analysis === "communities") {
                 const level = args.level === "file" ? "file" : "symbol"
                 const groups = yield* analytics.communities(repoId, {
@@ -1045,7 +1071,8 @@ export const createMcpServer = <R>(
                 ...(args.minDegree !== undefined ? { minDegree: args.minDegree } : {}),
                 ...(args.maxDegree !== undefined ? { maxDegree: args.maxDegree } : {}),
                 ...(args.limit !== undefined ? { limit: args.limit } : {}),
-                ...(args.offset !== undefined ? { offset: args.offset } : {})
+                ...(args.offset !== undefined ? { offset: args.offset } : {}),
+                ...(args.semantic !== undefined ? { semantic: args.semantic } : {})
               })
             })
           )
@@ -1061,7 +1088,7 @@ export const createMcpServer = <R>(
           const body = result.results
             .map(
               (symbol) =>
-                `${symbol.name} (${symbol.kind}) at ${symbol.filePath}:${symbol.startLine}\n  ID: ${symbol.id}\n  in-degree: ${symbol.inDegree ?? 0}\n  ${symbol.signature}`
+                `${symbol.name} (${symbol.kind}) at ${symbol.filePath}:${symbol.startLine}\n  ID: ${symbol.id}\n  in-degree: ${symbol.inDegree ?? 0}${symbol.score !== undefined ? ` · relevance: ${symbol.score}` : ""}\n  ${symbol.signature}`
             )
             .join("\n\n")
 

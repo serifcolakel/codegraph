@@ -476,7 +476,8 @@ const EDGE_KINDS: Readonly<Record<string, string>> = {
   IMPLEMENTS: "implements",
   CONTAINS: "contains",
   THROWS: "throws",
-  RAISES: "raises"
+  RAISES: "raises",
+  SIMILAR_TO: "similar_to"
 }
 
 interface VariableInfo {

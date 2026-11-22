@@ -190,6 +190,11 @@ class FundService:
         expect.arrayContaining(["repo_id", "src_file_id", "dst_file_id", "specifier", "kind"])
       )
 
+      const vectorColumns = yield* sql<{ name: string }>`PRAGMA table_info(symbol_vectors);`
+      expect(vectorColumns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(["symbol_id", "dims", "vector", "updated_at"])
+      )
+
       const byPart = yield* sql<{ symbol_id: string }>`
         SELECT symbol_id FROM symbols_fts WHERE symbols_fts MATCH 'fund';
       `

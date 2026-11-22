@@ -1,5 +1,6 @@
 import * as SqlClient from "@effect/sql/SqlClient"
 import { Context, Effect, Layer } from "effect"
+import { cosineSimilarity, decodeVector } from "../domain/embeddings.js"
 import { StoreError } from "../domain/errors.js"
 
 export type RankingAlgorithm = "pagerank" | "in_degree" | "complexity"
@@ -69,6 +70,20 @@ export interface CycleGroup {
   readonly members: readonly CycleMember[]
 }
 
+export interface DuplicateSymbol {
+  readonly id: string
+  readonly name: string
+  readonly kind: string
+  readonly filePath: string
+  readonly startLine: number
+}
+
+export interface DuplicatePair {
+  readonly left: DuplicateSymbol
+  readonly right: DuplicateSymbol
+  readonly similarity: number
+}
+
 export interface Analytics {
   readonly rank: (
     repoId: string,
@@ -94,6 +109,10 @@ export interface Analytics {
     repoId: string,
     options?: { readonly limit?: number }
   ) => Effect.Effect<readonly PackageRanking[], StoreError>
+  readonly duplicates: (
+    repoId: string,
+    options?: { readonly threshold?: number; readonly limit?: number }
+  ) => Effect.Effect<readonly DuplicatePair[], StoreError>
 }
 
 export const Analytics = Context.GenericTag<Analytics>("@codegraph/Analytics")
@@ -735,6 +754,112 @@ export const AnalyticsLive = Layer.effect(
           .slice(0, limit)
       })
 
-    return { rank, hotspots, deadCode, cycles, communities, packageRankings }
+    const duplicates = (
+      repoId: string,
+      options: { readonly threshold?: number; readonly limit?: number } = {}
+    ): Effect.Effect<readonly DuplicatePair[], StoreError> =>
+      Effect.gen(function* () {
+        const threshold = options.threshold ?? 0.8
+        const limit = clampLimit(options.limit, 50, 500)
+        const symbols = yield* loadSymbols(repoId)
+        const eligible = symbols.filter(
+          (symbol) =>
+            symbol.kind === "function" ||
+            symbol.kind === "method" ||
+            symbol.kind === "class" ||
+            symbol.kind === "interface" ||
+            symbol.kind === "type"
+        )
+
+        const vectorRows = yield* sql<{ symbolId: string; vector: Uint8Array }>`
+          SELECT v.symbol_id as symbolId, v.vector
+          FROM symbol_vectors v
+          JOIN symbols s ON v.symbol_id = s.id
+          JOIN files f ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId};
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Duplicate vector query failed", cause: e })
+          )
+        )
+        const vectors = new Map(vectorRows.map((row) => [row.symbolId, decodeVector(row.vector)]))
+
+        const symbolsByKind = new Map<string, SymbolRow[]>()
+        for (const symbol of eligible) {
+          if (!vectors.has(symbol.id)) continue
+          const list = symbolsByKind.get(symbol.kind) ?? []
+          list.push(symbol)
+          symbolsByKind.set(symbol.kind, list)
+        }
+
+        const pairs: DuplicatePair[] = []
+        for (const list of symbolsByKind.values()) {
+          for (let leftIndex = 0; leftIndex < list.length; leftIndex++) {
+            const left = list[leftIndex]
+            if (!left) continue
+            const leftVector = vectors.get(left.id)
+            if (!leftVector) continue
+            for (let rightIndex = leftIndex + 1; rightIndex < list.length; rightIndex++) {
+              const right = list[rightIndex]
+              if (!right) continue
+              const rightVector = vectors.get(right.id)
+              if (!rightVector) continue
+              const similarity = cosineSimilarity(leftVector, rightVector)
+              if (similarity < threshold) continue
+              pairs.push({
+                left: {
+                  id: left.id,
+                  name: left.name,
+                  kind: left.kind,
+                  filePath: left.filePath,
+                  startLine: left.startLine
+                },
+                right: {
+                  id: right.id,
+                  name: right.name,
+                  kind: right.kind,
+                  filePath: right.filePath,
+                  startLine: right.startLine
+                },
+                similarity: Number(similarity.toFixed(4))
+              })
+            }
+          }
+        }
+
+        const top = pairs
+          .sort((a, b) => b.similarity - a.similarity || a.left.name.localeCompare(b.left.name))
+          .slice(0, limit)
+
+        yield* sql
+          .withTransaction(
+            Effect.gen(function* () {
+              yield* sql`
+                DELETE FROM edges WHERE kind = 'similar_to' AND src_symbol_id IN (
+                  SELECT s.id FROM symbols s JOIN files f ON s.file_id = f.id
+                  WHERE f.repo_id = ${repoId}
+                );
+              `
+              for (const pair of top) {
+                yield* sql`
+                  INSERT OR REPLACE INTO edges (id, src_symbol_id, dst_symbol_id, kind)
+                  VALUES (
+                    ${`similar_${pair.left.id}->${pair.right.id}`},
+                    ${pair.left.id}, ${pair.right.id}, 'similar_to'
+                  );
+                `
+              }
+            })
+          )
+          .pipe(
+            Effect.mapError(
+              (e) => new StoreError({ message: "Failed to persist similar_to edges", cause: e })
+            )
+          )
+
+        return top
+      })
+
+    return { rank, hotspots, deadCode, cycles, communities, packageRankings, duplicates }
   })
 )

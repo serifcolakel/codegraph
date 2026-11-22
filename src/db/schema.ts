@@ -306,6 +306,27 @@ export const initSchema = Effect.gen(function* () {
     )
   )
 
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS symbol_vectors (
+      symbol_id TEXT PRIMARY KEY,
+      dims INTEGER NOT NULL,
+      vector BLOB NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create symbol_vectors table", cause: e })
+    )
+  )
+
+  yield* sql`
+    CREATE INDEX IF NOT EXISTS idx_symbol_vectors_dims ON symbol_vectors(dims);
+  `.pipe(
+    Effect.mapError(
+      (e) => new StoreError({ message: "Failed to create idx_symbol_vectors_dims", cause: e })
+    )
+  )
+
   const ftsTables = yield* sql<{ name: string }>`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_fts';
   `.pipe(

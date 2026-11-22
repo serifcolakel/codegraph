@@ -1,6 +1,7 @@
 import * as SqlClient from "@effect/sql/SqlClient"
 import { Context, Effect, Layer } from "effect"
 import { initSchema } from "../db/schema.js"
+import { EMBEDDING_DIMENSIONS, embedSymbol, encodeVector } from "../domain/embeddings.js"
 import { StoreError } from "../domain/errors.js"
 import { languageForPath } from "../domain/languages.js"
 import type {
@@ -114,6 +115,7 @@ export interface IndexStore {
     fromId?: string,
     toId?: string
   ) => Effect.Effect<SnapshotComparison | null, StoreError>
+  readonly ensureVectors: (repoId: string) => Effect.Effect<number, StoreError>
 }
 
 export const IndexStore = Context.GenericTag<IndexStore>("@codegraph/IndexStore")
@@ -259,6 +261,11 @@ export const IndexStoreLive = Layer.effect(
         yield* sql`
           DELETE FROM file_edges WHERE src_file_id = ${fileId} OR dst_file_id = ${fileId};
         `
+        yield* sql`
+          DELETE FROM symbol_vectors WHERE symbol_id IN (
+            SELECT id FROM symbols WHERE file_id = ${fileId}
+          );
+        `
         // Cascades to the file's symbols and their FTS rows.
         yield* sql`DELETE FROM files WHERE id = ${fileId};`
       })
@@ -293,6 +300,13 @@ export const IndexStoreLive = Layer.effect(
             Effect.gen(function* () {
               yield* sql`
                 DELETE FROM symbols_fts WHERE symbol_id IN (
+                  SELECT symbols.id FROM symbols
+                  JOIN files ON files.id = symbols.file_id
+                  WHERE files.repo_id = ${repoId}
+                );
+              `
+              yield* sql`
+                DELETE FROM symbol_vectors WHERE symbol_id IN (
                   SELECT symbols.id FROM symbols
                   JOIN files ON files.id = symbols.file_id
                   WHERE files.repo_id = ${repoId}
@@ -378,6 +392,18 @@ export const IndexStoreLive = Layer.effect(
                   ${symbolId}, ${sym.name}, ${sym.signature}, ${sym.doc ?? ""},
                   ${tokenizeIdentifier(`${sym.name} ${qualifiedName}`)}
                 );
+              `
+
+                const vector = embedSymbol({
+                  name: sym.name,
+                  qualifiedName,
+                  kind: sym.kind,
+                  signature: sym.signature,
+                  ...(sym.doc ? { doc: sym.doc } : {})
+                })
+                yield* sql`
+                INSERT OR REPLACE INTO symbol_vectors (symbol_id, dims, vector, updated_at)
+                VALUES (${symbolId}, ${EMBEDDING_DIMENSIONS}, ${encodeVector(vector)}, ${new Date().toISOString()});
               `
               }
 
@@ -946,6 +972,57 @@ export const IndexStoreLive = Layer.effect(
         }
       })
 
+    const ensureVectors = (repoId: string): Effect.Effect<number, StoreError> =>
+      Effect.gen(function* () {
+        const rows = yield* sql<{
+          id: string
+          name: string
+          qualifiedName: string
+          kind: string
+          signature: string
+          doc: string
+        }>`
+          SELECT s.id, s.name, s.qualified_name as qualifiedName, s.kind, s.signature, s.doc
+          FROM symbols s
+          JOIN files f ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId}
+            AND NOT EXISTS (SELECT 1 FROM symbol_vectors v WHERE v.symbol_id = s.id);
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to load symbols for vectors", cause: e })
+          )
+        )
+
+        if (rows.length === 0) return 0
+        const updatedAt = new Date().toISOString()
+        yield* sql
+          .withTransaction(
+            Effect.forEach(
+              rows,
+              (row) => {
+                const vector = embedSymbol({
+                  name: row.name,
+                  qualifiedName: row.qualifiedName,
+                  kind: row.kind,
+                  signature: row.signature,
+                  ...(row.doc ? { doc: row.doc } : {})
+                })
+                return sql`
+                  INSERT OR REPLACE INTO symbol_vectors (symbol_id, dims, vector, updated_at)
+                  VALUES (${row.id}, ${EMBEDDING_DIMENSIONS}, ${encodeVector(vector)}, ${updatedAt});
+                `
+              },
+              { concurrency: 1 }
+            )
+          )
+          .pipe(
+            Effect.mapError(
+              (e) => new StoreError({ message: "Failed to backfill symbol vectors", cause: e })
+            )
+          )
+        return rows.length
+      })
+
     const getImportSummary = (
       repoId: string
     ): Effect.Effect<
@@ -1072,7 +1149,8 @@ export const IndexStoreLive = Layer.effect(
       markRepoIndexed,
       saveSnapshot,
       listSnapshots,
-      compareSnapshots
+      compareSnapshots,
+      ensureVectors
     }
   })
 )

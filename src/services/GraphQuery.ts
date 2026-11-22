@@ -1,6 +1,7 @@
 import * as SqlClient from "@effect/sql/SqlClient"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Either, Layer } from "effect"
 import { appConfig } from "../domain/config.js"
+import { cosineSimilarity, decodeVector, embedText } from "../domain/embeddings.js"
 import { NotFoundError, StoreError } from "../domain/errors.js"
 import type {
   EdgeKind,
@@ -24,10 +25,15 @@ export interface SearchGraphOptions {
   readonly maxDegree?: number
   readonly limit?: number
   readonly offset?: number
+  readonly semantic?: boolean
+}
+
+export interface RankedSymbolResult extends SymbolWithFile {
+  readonly score?: number
 }
 
 export interface SearchGraphResult {
-  readonly results: readonly SymbolWithFile[]
+  readonly results: readonly RankedSymbolResult[]
   readonly total: number
   readonly hasMore: boolean
   readonly truncated: boolean
@@ -363,37 +369,99 @@ export const GraphQueryLive = Layer.effect(
           Effect.mapError((e) => new StoreError({ message: "Search graph query failed", cause: e }))
         )
 
-        let nameMatcher: ((name: string) => boolean) | undefined
-        if (options.namePattern) {
-          if (options.regex) {
-            try {
-              const pattern = new RegExp(options.namePattern, "i")
-              nameMatcher = (name) => pattern.test(name)
-            } catch {
-              nameMatcher = undefined
-            }
-          }
-          if (!nameMatcher) {
-            const needle = options.namePattern.toLowerCase()
-            nameMatcher = (name) => name.toLowerCase().includes(needle)
-          }
-        }
-
         const fileNeedle = options.filePattern?.toLowerCase()
         const minDegree = options.minDegree ?? 0
         const maxDegree = options.maxDegree ?? Number.MAX_SAFE_INTEGER
 
-        const filtered = rows.filter((row) => {
-          if (nameMatcher && !nameMatcher(row.name)) return false
+        const baseFiltered = rows.filter((row) => {
           if (fileNeedle && !row.filePath.toLowerCase().includes(fileNeedle)) return false
           if (row.inDegree < minDegree || row.inDegree > maxDegree) return false
           return true
         })
 
+        let ranked: Array<(typeof rows)[number] & { score?: number }>
+
+        if (options.semantic && options.namePattern) {
+          let candidates = baseFiltered
+          if (options.regex) {
+            try {
+              const pattern = new RegExp(options.namePattern, "i")
+              candidates = candidates.filter((row) => pattern.test(row.name))
+            } catch {
+              // Fall back to semantic-only ranking on an invalid regex.
+            }
+          }
+
+          const vectorRows = yield* sql<{ symbolId: string; vector: Uint8Array }>`
+            SELECT v.symbol_id as symbolId, v.vector
+            FROM symbol_vectors v
+            JOIN symbols s ON v.symbol_id = s.id
+            JOIN files f ON s.file_id = f.id
+            ${options.repoId ? sql`WHERE f.repo_id = ${options.repoId}` : sql``};
+          `.pipe(
+            Effect.mapError(
+              (e) => new StoreError({ message: "Semantic vector query failed", cause: e })
+            )
+          )
+          const vectors = new Map(vectorRows.map((row) => [row.symbolId, decodeVector(row.vector)]))
+          const queryVector = embedText(options.namePattern)
+
+          const terms = options.namePattern
+            .replace(/[^\p{L}\p{N}_]+/gu, " ")
+            .trim()
+            .split(/\s+/)
+            .filter((term) => term.length > 0)
+          const bm25 = new Map<string, number>()
+          if (terms.length > 0) {
+            const match = terms.map((term) => `${term}*`).join(" ")
+            const ftsResult = yield* sql<{ symbolId: string }>`
+              SELECT symbol_id as symbolId
+              FROM symbols_fts
+              WHERE symbols_fts MATCH ${match}
+              ORDER BY bm25(symbols_fts)
+              LIMIT 500;
+            `.pipe(Effect.either)
+            if (Either.isRight(ftsResult)) {
+              ftsResult.right.forEach((row, index) => {
+                bm25.set(row.symbolId, 1 / (1 + index))
+              })
+            }
+          }
+
+          const maxLogDegree = Math.max(1, ...candidates.map((row) => Math.log1p(row.inDegree)))
+          ranked = candidates
+            .map((row) => {
+              const semantic = cosineSimilarity(queryVector, vectors.get(row.id) ?? [])
+              const lexical = bm25.get(row.id) ?? 0
+              const graph = Math.log1p(row.inDegree) / maxLogDegree
+              const score = 0.6 * semantic + 0.25 * lexical + 0.15 * graph
+              return { ...row, score }
+            })
+            .filter((row) => (row.score ?? 0) > 0.01)
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || a.name.localeCompare(b.name))
+        } else {
+          let nameMatcher: ((name: string) => boolean) | undefined
+          if (options.namePattern) {
+            if (options.regex) {
+              try {
+                const pattern = new RegExp(options.namePattern, "i")
+                nameMatcher = (name) => pattern.test(name)
+              } catch {
+                nameMatcher = undefined
+              }
+            }
+            if (!nameMatcher) {
+              const needle = options.namePattern.toLowerCase()
+              nameMatcher = (name) => name.toLowerCase().includes(needle)
+            }
+          }
+          ranked = baseFiltered.filter((row) => !nameMatcher || nameMatcher(row.name))
+        }
+
         const offset = Math.max(0, options.offset ?? 0)
         const limit = Math.max(1, Math.min(200, options.limit ?? 20))
-        const total = filtered.length
-        const page = filtered.slice(offset, offset + limit)
+        const total = ranked.length
+        const page = ranked.slice(offset, offset + limit)
 
         return {
           results: page.map((row) => ({
@@ -407,7 +475,8 @@ export const GraphQueryLive = Layer.effect(
             signature: row.signature,
             doc: row.doc,
             exported: row.exported === 1,
-            inDegree: row.inDegree
+            inDegree: row.inDegree,
+            ...(row.score !== undefined ? { score: Number(row.score.toFixed(4)) } : {})
           })),
           total,
           hasMore: offset + page.length < total,

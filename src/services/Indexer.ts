@@ -119,8 +119,9 @@ export const IndexerLive = Layer.effect(
           { concurrency: config.concurrency }
         ).pipe(Effect.withSpan("Indexer.parseAndStoreFiles"))
 
-        // Backfill sizes for unchanged files so migrated databases and
-        // incremental re-indexes report accurate source totals.
+        // Backfill sizes and vectors for unchanged files so migrated databases
+        // and incremental re-indexes report accurate totals and semantics.
+        yield* store.ensureVectors(repo.id).pipe(Effect.withSpan("IndexStore.ensureVectors"))
         yield* store
           .updateFileSizes(
             repo.id,
