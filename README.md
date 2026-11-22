@@ -121,8 +121,30 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
 `search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `index_repository`,
 `index_job_status`, `delete_project`, `list_projects`, `find_references`, `neighborhood`,
-`index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, and
-`read_file_range`. Inputs are validated
+`index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `query_graph`, and
+`read_file_range`.
+
+`query_graph` accepts a safe, read-only Cypher subset:
+
+```cypher
+MATCH (s:Symbol)
+WHERE s.kind = "function" AND s.name CONTAINS "Fund"
+RETURN s.name AS name, s.filePath AS file, s.startLine AS line
+ORDER BY s.name
+LIMIT 20
+```
+
+```cypher
+MATCH (a:Symbol)-[e:CALLS]->(b:Symbol)
+WHERE a.name = "handler"
+RETURN a.name AS caller, b.name AS callee
+LIMIT 50
+```
+
+Supported node labels are `Symbol`, `File` and `Repository`; relationship
+patterns support Symbol-to-Symbol edges (`CALLS`, `CALL_REFERENCE`, `USAGE`,
+`REFERENCES`, `EXTENDS`, `IMPLEMENTS`, `CONTAINS`, `THROWS`, `RAISES`). Writes
+(`CREATE`, `SET`, `DELETE`, `MERGE`, `CALL`) are rejected. Inputs are validated
 with Effect `Schema`, and results are compact text with `file:line` references.
 
 ### 1. Index the repository
