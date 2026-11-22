@@ -32,6 +32,25 @@ test.describe("CodeGraph web UI", () => {
       `${repo.sourceBytes.toLocaleString("en-US")} bytes across ${repo.files.toLocaleString("en-US")} files`
     )
     await expect(page.getByTestId("stat-symbols")).toHaveText(repo.symbols.toLocaleString("en-US"))
+
+    await expect(page.getByTestId("info-indexed")).toHaveText(/ago|just now/)
+    await expect(page.getByTestId("info-source")).toHaveText(/\d+(\.\d+)? (B|KB|MB)/)
+    await expect(page.getByTestId("info-files")).toHaveText(repo.files.toLocaleString("en-US"))
+    await expect(page.getByTestId("info-symbols")).toHaveText(repo.symbols.toLocaleString("en-US"))
+  })
+
+  test("shows the index details dialog", async ({ page }) => {
+    await page.getByTestId("details-button").click()
+    await expect(page.getByTestId("details-modal")).toBeVisible()
+    await expect(page.getByTestId("details-body")).toContainText("Parse coverage")
+    await expect(page.getByTestId("details-languages")).toContainText("typescript")
+    await expect(page.getByTestId("details-coverage")).toContainText("Parsed")
+    await expect(page.getByTestId("details-imports")).toContainText("Resolved")
+    await expect(page.getByTestId("details-jobs")).toBeVisible()
+    await expect(page.getByTestId("details-source")).toContainText(/B|KB|MB/)
+
+    await page.getByTestId("details-footer-close").click()
+    await expect(page.getByTestId("details-modal")).not.toBeVisible()
   })
 
   test("renders the file graph with view stats", async ({ page }) => {

@@ -45,6 +45,10 @@ export interface IndexStore {
     parsed: ParsedFile
   ) => Effect.Effect<void, StoreError>
   readonly deleteFiles: (fileIds: readonly string[]) => Effect.Effect<void, StoreError>
+  readonly updateFileSizes: (
+    repoId: string,
+    files: readonly { readonly path: string; readonly sizeBytes: number }[]
+  ) => Effect.Effect<void, StoreError>
   readonly deleteRepo: (repoId: string) => Effect.Effect<boolean, StoreError>
   readonly resolveEdges: (
     repoId: string,
@@ -695,6 +699,31 @@ export const IndexStoreLive = Layer.effect(
         }
       })
 
+    const updateFileSizes = (
+      repoId: string,
+      files: readonly { readonly path: string; readonly sizeBytes: number }[]
+    ): Effect.Effect<void, StoreError> =>
+      files.length === 0
+        ? Effect.void
+        : sql
+            .withTransaction(
+              Effect.forEach(
+                files,
+                (file) =>
+                  sql`
+                    UPDATE files SET size_bytes = ${file.sizeBytes}
+                    WHERE repo_id = ${repoId} AND path = ${file.path};
+                  `,
+                { concurrency: 1 }
+              )
+            )
+            .pipe(
+              Effect.asVoid,
+              Effect.mapError(
+                (e) => new StoreError({ message: "Failed to update file sizes", cause: e })
+              )
+            )
+
     const markRepoIndexed = (
       repoId: string,
       indexedAt: string,
@@ -759,6 +788,7 @@ export const IndexStoreLive = Layer.effect(
       saveFileIndex,
       deleteFiles,
       deleteRepo,
+      updateFileSizes,
       resolveEdges,
       getStats,
       getCoverage,

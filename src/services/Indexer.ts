@@ -60,6 +60,7 @@ export const IndexerLive = Layer.effect(
         const scannedPathSet = new Set<string>()
 
         const filesToProcess: FileScanResult[] = []
+        const skippedFiles: FileScanResult[] = []
         let filesSkipped = 0
 
         for (const scanned of scannedFiles) {
@@ -68,6 +69,7 @@ export const IndexerLive = Layer.effect(
 
           if (!options.force && existing && existing.hash === scanned.hash) {
             filesSkipped++
+            skippedFiles.push(scanned)
           } else {
             filesToProcess.push(scanned)
           }
@@ -116,6 +118,15 @@ export const IndexerLive = Layer.effect(
             }),
           { concurrency: config.concurrency }
         ).pipe(Effect.withSpan("Indexer.parseAndStoreFiles"))
+
+        // Backfill sizes for unchanged files so migrated databases and
+        // incremental re-indexes report accurate source totals.
+        yield* store
+          .updateFileSizes(
+            repo.id,
+            skippedFiles.map((file) => ({ path: file.path, sizeBytes: file.sizeBytes }))
+          )
+          .pipe(Effect.withSpan("IndexStore.updateFileSizes"))
 
         // 6. Cross-file edge resolution
         const packageMappings = yield* collectPackageMappings(fs, path, resolvedPath)

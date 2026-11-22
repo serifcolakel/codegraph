@@ -185,8 +185,131 @@
         position: relative;
         z-index: 1;
         display: grid;
-        grid-template-rows: auto 1fr;
+        grid-template-rows: auto auto 1fr;
         height: 100%;
+      }
+
+      .repo-info-bar {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin: 10px 16px 0;
+        padding: 8px 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        font-size: 0.75rem;
+        color: var(--text-dim);
+      }
+
+      .repo-info-item {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 6px;
+      }
+
+      .repo-info-key {
+        font-size: 0.58rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--text-faint);
+      }
+
+      .repo-info-value {
+        color: var(--text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .repo-info-spacer {
+        flex: 1;
+      }
+
+      .info-btn {
+        height: 28px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--surface-soft);
+        color: var(--text);
+        font: inherit;
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          border-color 0.16s ease,
+          background 0.16s ease;
+      }
+
+      .info-btn:hover {
+        border-color: var(--line-strong);
+        background: var(--surface);
+      }
+
+      .details-modal {
+        width: min(640px, calc(100vw - 32px));
+      }
+
+      .details-section {
+        display: grid;
+        gap: 8px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .details-section:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .details-section h3 {
+        margin: 0;
+        font-size: 0.64rem;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+        color: var(--text-faint);
+      }
+
+      .details-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        font-size: 0.78rem;
+      }
+
+      .details-label {
+        color: var(--text-dim);
+      }
+
+      .details-value {
+        color: var(--text);
+        font-weight: 600;
+        text-align: right;
+        word-break: break-word;
+      }
+
+      .details-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .details-job {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 0.74rem;
+        color: var(--text-dim);
+      }
+
+      .details-empty {
+        font-size: 0.75rem;
+        color: var(--text-faint);
       }
 
       header {
@@ -1772,6 +1895,39 @@
         </div>
       </header>
 
+      <div class="repo-info-bar" data-testid="repo-info-bar">
+        <span class="repo-info-item">
+          <span class="repo-info-key">Indexed</span>
+          <span class="repo-info-value" id="infoIndexed" data-testid="info-indexed">—</span>
+        </span>
+        <span class="repo-info-item">
+          <span class="repo-info-key">Source</span>
+          <span class="repo-info-value" id="infoSource" data-testid="info-source">—</span>
+        </span>
+        <span class="repo-info-item">
+          <span class="repo-info-key">Files</span>
+          <span class="repo-info-value" id="infoFiles" data-testid="info-files">0</span>
+        </span>
+        <span class="repo-info-item">
+          <span class="repo-info-key">Symbols</span>
+          <span class="repo-info-value" id="infoSymbols" data-testid="info-symbols">0</span>
+        </span>
+        <span class="repo-info-item">
+          <span class="repo-info-key">Edges</span>
+          <span class="repo-info-value" id="infoEdges" data-testid="info-edges">0</span>
+        </span>
+        <span class="repo-info-spacer"></span>
+        <button
+          type="button"
+          id="detailsBtn"
+          class="info-btn"
+          data-testid="details-button"
+          title="Show index details"
+        >
+          Details
+        </button>
+      </div>
+
       <main class="workspace">
         <section class="graph-panel" aria-label="Graph">
           <div id="cy" data-testid="graph-canvas"></div>
@@ -2018,6 +2174,50 @@
       </div>
     </dialog>
 
+    <dialog
+      id="detailsModal"
+      class="modal details-modal"
+      data-testid="details-modal"
+      aria-labelledby="detailsTitle"
+    >
+      <div class="modal-header">
+        <div>
+          <div id="detailsTitle" class="modal-title">Index details</div>
+          <div class="modal-sub">Coverage, languages, imports and recent jobs.</div>
+        </div>
+        <button
+          type="button"
+          id="detailsCloseBtn"
+          class="icon-btn"
+          data-testid="details-close"
+          aria-label="Close details"
+          title="Close"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="detailsBody" data-testid="details-body"></div>
+      <div class="modal-footer">
+        <button
+          type="button"
+          id="detailsFooterBtn"
+          class="ghost-btn"
+          data-testid="details-footer-close"
+        >
+          Close
+        </button>
+      </div>
+    </dialog>
+
     <div
       id="toast" data-testid="toast"
       class="toast"
@@ -2193,6 +2393,14 @@
         $("statSource").title = `${sourceBytes.toLocaleString("en-US")} bytes across ${fileCount.toLocaleString("en-US")} files`;
         $("statSymbols").textContent = symbolCount.toLocaleString("en-US");
         $("statSymbols").title = `${symbolCount.toLocaleString("en-US")} symbols · ${((repo && repo.edges) || 0).toLocaleString("en-US")} edges`;
+
+        $("infoIndexed").textContent = formatRelativeTime(indexedAt);
+        $("infoIndexed").title = $("statIndexed").title;
+        $("infoSource").textContent = formatBytes(sourceBytes);
+        $("infoSource").title = $("statSource").title;
+        $("infoFiles").textContent = fileCount.toLocaleString("en-US");
+        $("infoSymbols").textContent = symbolCount.toLocaleString("en-US");
+        $("infoEdges").textContent = ((repo && repo.edges) || 0).toLocaleString("en-US");
       }
 
       function clearRepoMeta() {
@@ -2202,6 +2410,141 @@
         $("statSource").title = "Indexed source size";
         $("statSymbols").textContent = "0";
         $("statSymbols").title = "Searchable symbols";
+        $("infoIndexed").textContent = "—";
+        $("infoIndexed").title = "Not indexed yet";
+        $("infoSource").textContent = "—";
+        $("infoSource").title = "Indexed source size";
+        $("infoFiles").textContent = "0";
+        $("infoSymbols").textContent = "0";
+        $("infoEdges").textContent = "0";
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (character) => {
+          switch (character) {
+            case "&":
+              return "&amp;";
+            case "<":
+              return "&lt;";
+            case ">":
+              return "&gt;";
+            case '"':
+              return "&quot;";
+            default:
+              return "&#39;";
+          }
+        });
+      }
+
+      function detailsRow(label, value, testId) {
+        const id = testId ? ` data-testid="${testId}"` : "";
+        return `<div class="details-row"${id}><span class="details-label">${escapeHtml(label)}</span><span class="details-value">${escapeHtml(value)}</span></div>`;
+      }
+
+      function detailsSection(title, body, testId) {
+        const id = testId ? ` data-testid="${testId}"` : "";
+        return `<div class="details-section"${id}><h3>${escapeHtml(title)}</h3>${body}</div>`;
+      }
+
+      function renderDetails(repo, coverage, jobs) {
+        const coverageData = coverage.coverage ?? {};
+        const imports = coverage.imports ?? {};
+        const languages = Object.entries(coverageData.languages ?? {});
+        const languageBody =
+          languages.length > 0
+            ? languages
+                .map(([language, count]) => detailsRow(language, count.toLocaleString("en-US")))
+                .join("")
+            : '<div class="details-empty">No languages recorded.</div>';
+
+        const jobBody =
+          Array.isArray(jobs) && jobs.length > 0
+            ? jobs
+                .slice(0, 5)
+                .map(
+                  (job) =>
+                    `<div class="details-job"><span>${escapeHtml(job.path)}</span><span>${escapeHtml(job.status)} · ${escapeHtml(formatRelativeTime(job.createdAt))}</span></div>`,
+                )
+                .join("")
+            : '<div class="details-empty">No indexing jobs yet.</div>';
+
+        $("detailsBody").innerHTML = [
+          detailsSection(
+            "Index",
+            [
+              detailsRow("Path", repo.rootPath, "details-path"),
+              detailsRow(
+                "Indexed at",
+                repo.indexedAt ? new Date(repo.indexedAt).toLocaleString() : "not recorded",
+                "details-indexed",
+              ),
+              detailsRow(
+                "Duration",
+                repo.indexDurationMs !== undefined ? `${repo.indexDurationMs} ms` : "—",
+              ),
+              detailsRow("Repo ID", repo.id),
+            ].join(""),
+          ),
+          detailsSection(
+            "Data",
+            [
+              detailsRow("Source size", formatBytes(repo.sourceBytes || 0), "details-source"),
+              detailsRow("Files", (repo.files || 0).toLocaleString("en-US")),
+              detailsRow("Symbols", (repo.symbols || 0).toLocaleString("en-US")),
+              detailsRow("Edges", (repo.edges || 0).toLocaleString("en-US")),
+            ].join(""),
+          ),
+          detailsSection("Languages", languageBody, "details-languages"),
+          detailsSection(
+            "Parse coverage",
+            [
+              detailsRow("Parsed", (coverageData.parsed || 0).toLocaleString("en-US")),
+              detailsRow("Partial", (coverageData.partial || 0).toLocaleString("en-US")),
+              detailsRow("Skipped", (coverageData.skipped || 0).toLocaleString("en-US")),
+              detailsRow("Unsupported", (coverageData.unsupported || 0).toLocaleString("en-US")),
+              detailsRow("Unknown", (coverageData.unknown || 0).toLocaleString("en-US")),
+            ].join(""),
+            "details-coverage",
+          ),
+          detailsSection(
+            "Imports",
+            [
+              detailsRow("Total", (imports.total || 0).toLocaleString("en-US")),
+              detailsRow("Resolved", (imports.resolved || 0).toLocaleString("en-US")),
+              detailsRow("Unresolved", (imports.unresolved || 0).toLocaleString("en-US")),
+            ].join(""),
+            "details-imports",
+          ),
+          detailsSection("Recent jobs", jobBody, "details-jobs"),
+        ].join("");
+      }
+
+      async function openDetailsModal() {
+        const repo = state.repos.find((item) => item.id === state.repoId);
+        if (!repo) {
+          toast("Select a repository first.", true);
+          return;
+        }
+        const dialog = $("detailsModal");
+        if (typeof dialog.showModal === "function") dialog.showModal();
+        else dialog.setAttribute("open", "");
+        $("detailsBody").innerHTML = '<div class="details-empty">Loading details…</div>';
+
+        try {
+          const [coverage, jobs] = await Promise.all([
+            fetchJson(`/api/coverage?repo=${encodeURIComponent(repo.id)}`),
+            fetchJson("/api/jobs?limit=5"),
+          ]);
+          renderDetails(repo, coverage, jobs);
+        } catch (error) {
+          $("detailsBody").innerHTML = `<div class="details-empty">Could not load details: ${escapeHtml(error.message)}</div>`;
+        }
+      }
+
+      function closeDetailsModal() {
+        const dialog = $("detailsModal");
+        if (typeof dialog.close === "function") dialog.close();
+        else dialog.removeAttribute("open");
       }
 
       function setStats(nodes, edges) {
@@ -3377,6 +3720,15 @@
       });
       $("indexModal").addEventListener("click", (event) => {
         if (event.target === $("indexModal")) closeIndexModal();
+      });
+
+      $("detailsBtn").addEventListener("click", () => {
+        openDetailsModal().catch(() => {});
+      });
+      $("detailsCloseBtn").addEventListener("click", closeDetailsModal);
+      $("detailsFooterBtn").addEventListener("click", closeDetailsModal);
+      $("detailsModal").addEventListener("click", (event) => {
+        if (event.target === $("detailsModal")) closeDetailsModal();
       });
 
       $("deleteRepoBtn").addEventListener("click", openDeleteModal);
