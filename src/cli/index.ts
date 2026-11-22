@@ -8,6 +8,7 @@ import { appConfig } from "../domain/config.js"
 import { serveHttp } from "../http/index.js"
 import { startMcpServer } from "../mcp/index.js"
 import { type Analytics, AnalyticsLive } from "../services/Analytics.js"
+import { Artifacts, ArtifactsLive } from "../services/Artifacts.js"
 import { ChangeImpact, ChangeImpactLive } from "../services/ChangeImpact.js"
 import { CrossRepo, CrossRepoLive } from "../services/CrossRepo.js"
 import { Diagnostics, DiagnosticsLive, formatStatus } from "../services/Diagnostics.js"
@@ -21,6 +22,51 @@ import { type IndexJobs, IndexJobsLive } from "../services/IndexJobs.js"
 import { IndexStore, IndexStoreLive } from "../services/IndexStore.js"
 import { ParserLive } from "../services/Parser.js"
 import { type QueryLanguage, QueryLanguageLive } from "../services/QueryLanguage.js"
+
+// 0. Artifact commands (share a repo-scoped graph baseline)
+const artifactExportCommand = Command.make(
+  "export",
+  { repo: Args.text({ name: "repo" }), file: Args.text({ name: "file" }) },
+  ({ repo, file }) =>
+    Effect.gen(function* () {
+      const store = yield* IndexStore
+      yield* store.initSchema()
+      const artifacts = yield* Artifacts
+      const result = yield* artifacts.exportRepo(repo, file)
+      yield* Console.log(
+        `Exported ${result.files} files, ${result.symbols} symbols, ${result.edges} edges`
+      )
+      yield* Console.log(`Artifact: ${result.path} (${result.bytes} bytes)`)
+    })
+)
+
+const artifactImportCommand = Command.make(
+  "import",
+  {
+    file: Args.text({ name: "file" }),
+    path: Args.text({ name: "path" }),
+    force: Options.boolean("force")
+  },
+  ({ file, path: target, force }) =>
+    Effect.gen(function* () {
+      const store = yield* IndexStore
+      yield* store.initSchema()
+      const artifacts = yield* Artifacts
+      const result = yield* artifacts.importRepo(file, target, { force })
+      yield* Console.log(
+        `Imported ${result.files} files, ${result.symbols} symbols, ${result.edges} edges into ${result.repoId}`
+      )
+      const indexer = yield* Indexer
+      const report = yield* indexer.indexRepo(target)
+      yield* Console.log(
+        `Incremental update: ${report.filesIndexed} indexed, ${report.filesSkipped} skipped, ${report.filesDeleted} deleted`
+      )
+    })
+)
+
+const artifactCommand = Command.make("artifact", {}, () =>
+  Console.log("Use: artifact export <repo> <file> | artifact import <file> <path> [--force]")
+).pipe(Command.withSubcommands([artifactExportCommand, artifactImportCommand]))
 
 // 1. Index command
 const indexCommand = Command.make(
@@ -236,6 +282,7 @@ const mcpCommand = Command.make("mcp", {}, () =>
       | Diagnostics
       | ChangeImpact
       | Freshness
+      | Artifacts
       | Indexer
       | IndexJobs
       | IndexJobRunner
@@ -254,6 +301,7 @@ const mcpCommand = Command.make("mcp", {}, () =>
 const rootCommand = Command.make("codegraph").pipe(
   Command.withSubcommands([
     indexCommand,
+    artifactCommand,
     statsCommand,
     coverageCommand,
     freshnessCommand,
@@ -289,6 +337,9 @@ export const MainLive = Layer.unwrapEffect(
     const FreshnessServiceLive = FreshnessLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, NodeContext.layer))
     )
+    const ArtifactsServiceLive = ArtifactsLive.pipe(
+      Layer.provide(Layer.mergeAll(StoreLive, SqlLive, NodeContext.layer))
+    )
     const IndexJobsServiceLive = IndexJobsLive.pipe(Layer.provide(SqlLive))
     const IndexerServiceLive = IndexerLive.pipe(
       Layer.provide(Layer.mergeAll(StoreLive, WalkerLive, ParserLive, NodeContext.layer))
@@ -311,6 +362,7 @@ export const MainLive = Layer.unwrapEffect(
       DiagnosticsServiceLive,
       ChangeImpactServiceLive,
       FreshnessServiceLive,
+      ArtifactsServiceLive,
       GitChangesLive,
       NodeContext.layer
     )
