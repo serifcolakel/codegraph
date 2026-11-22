@@ -96,19 +96,19 @@ configured ignore globs.
 
 ## HTTP API
 
-| Endpoint                                        | Description                                |
-| ----------------------------------------------- | ------------------------------------------ |
-| `GET /api/repos`                                | Repos with index time, size and counts     |
-| `GET /api/coverage?repo=`                       | Parse coverage and import diagnostics      |
-| `GET /api/architecture?repo=`                   | Languages, packages, entry points, hotspots|
-| `GET /api/graph?repo=&level=file`               | File-level import/call graph               |
-| `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)            |
-| `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                        |
-| `GET /api/search?q=&repo=`                      | FTS symbol search                          |
-| `GET /api/symbol/:id`                           | Symbol details, callers and callees        |
-| `POST /api/index`                               | Index a folder (`{ path, name?, force? }`) |
-| `POST /api/reindex`                             | Refresh a repo (`{ repoId, force? }`)      |
-| `GET /`                                         | Single-page graph UI                       |
+| Endpoint                                        | Description                                 |
+| ----------------------------------------------- | ------------------------------------------- |
+| `GET /api/repos`                                | Repos with index time, size and counts      |
+| `GET /api/coverage?repo=`                       | Parse coverage and import diagnostics       |
+| `GET /api/architecture?repo=`                   | Languages, packages, entry points, hotspots |
+| `GET /api/graph?repo=&level=file`               | File-level import/call graph                |
+| `GET /api/graph?repo=&level=symbol`             | Ranked symbol graph (seed view)             |
+| `GET /api/graph?repo=&focus=<symbolId>&depth=1` | Symbol neighborhood                         |
+| `GET /api/search?q=&repo=`                      | FTS symbol search                           |
+| `GET /api/symbol/:id`                           | Symbol details, callers and callees         |
+| `POST /api/index`                               | Index a folder (`{ path, name?, force? }`)  |
+| `POST /api/reindex`                             | Refresh a repo (`{ repoId, force? }`)       |
+| `GET /`                                         | Single-page graph UI                        |
 
 The web UI has **Index a repository** and **Re-index current repository** actions,
 so a new folder can be indexed without restarting the server. The index request
@@ -220,6 +220,8 @@ src/
   services/   FileWalker, Parser, IndexStore, Indexer, GraphQuery, Diagnostics
 web/          Single-page Cytoscape.js visualization
 tests/        @effect/vitest service and integration tests
+e2e/          Playwright E2E tests and fixture repository
+playwright.config.ts
 ```
 
 ## Development
@@ -228,7 +230,13 @@ tests/        @effect/vitest service and integration tests
 npm run typecheck   # tsc --noEmit
 npm test            # vitest run
 npm run test:watch  # vitest watch mode
+npm run test:e2e    # Playwright E2E (builds, indexes e2e fixture, serves :4321)
 ```
+
+The first E2E run needs a browser: `npx playwright install chromium`. E2E
+artifacts (traces, screenshots, HTML report) are written to `test-results/` and
+`playwright-report/`. UI controls used by the tests expose stable `data-testid`
+attributes.
 
 ## Design notes
 

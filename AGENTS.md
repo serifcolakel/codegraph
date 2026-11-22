@@ -16,8 +16,10 @@
 - Build with `npm run build`.
 - Type-check with `npm run typecheck`.
 - Run tests with `npm test`.
+- Run Playwright E2E tests with `npm run test:e2e` (first run: `npx playwright install chromium`).
 - Run Biome checks with `npm run check`; apply only safe repository fixes with `npm run check:fix`.
 - Vitest tests live in `tests/**/*.test.ts` and use `@effect/vitest` for Effect-based tests.
+- Playwright E2E tests live in `e2e/**/*.spec.ts` and use the fixture in `e2e/fixtures/`.
 
 ## Test-Driven Workflow
 
@@ -28,7 +30,7 @@
 - Indexing changes: verify a fresh index, an incremental re-index, a changed file, a deleted file, and FTS/edge consistency.
 - Query, HTTP and MCP changes: assert response shapes, limits (`truncated`, depth caps, paging), error paths and `file:line` output.
 - Schema changes: test migration from the previous schema, including FTS repopulation.
-- UI changes: run `serve`, load `/` and verify the affected controls, empty states and browser console; use a headless-browser smoke check when possible.
+- UI changes: run `serve`, load `/` and verify the affected controls, empty states and browser console; add stable `data-testid` attributes and extend `e2e/app.spec.ts` when behavior changes.
 - Finish only when typecheck, focused tests, full tests, Biome and build pass.
 
 ### Manual Smoke Checks
