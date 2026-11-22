@@ -67,6 +67,17 @@ const ROUTE_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS
 
 const EXPRESS_ROUTE_RECEIVERS = new Set(["app", "router", "server", "fastify", "api"])
 
+const CHANNEL_PUBLISH_METHODS = new Set(["emit", "publish", "send", "dispatch", "produce"])
+const CHANNEL_SUBSCRIBE_METHODS = new Set([
+  "on",
+  "once",
+  "addListener",
+  "prependListener",
+  "subscribe",
+  "consume",
+  "listen"
+])
+
 const SCAN_CALLS = new Set([
   "find",
   "findIndex",
@@ -742,6 +753,53 @@ export const ParserLive = Layer.succeed(Parser, {
           return (
             smallestContaining(callableSymbols, line) ?? smallestContaining(containerSymbols, line)
           )?.name
+        }
+
+        // 6.6 Event channels (emit/publish/on/subscribe with literal names)
+        const channelSymbols = new Map<string, ParsedSymbol>()
+        const channelEdges = new Set<string>()
+        for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+          const callee = call.getExpression()
+          if (!Node.isPropertyAccessExpression(callee)) continue
+          const method = callee.getName()
+          const publish = CHANNEL_PUBLISH_METHODS.has(method)
+          const subscribe = CHANNEL_SUBSCRIBE_METHODS.has(method)
+          if (!publish && !subscribe) continue
+
+          const [eventArg] = call.getArguments()
+          if (!eventArg) continue
+          if (!Node.isStringLiteral(eventArg) && !Node.isNoSubstitutionTemplateLiteral(eventArg)) {
+            continue
+          }
+          const eventName = eventArg.getLiteralText().trim()
+          if (!eventName) continue
+          const channelName = `channel:${eventName}`
+          if (!channelSymbols.has(channelName)) {
+            const symbol: ParsedSymbol = {
+              name: channelName,
+              kind: "channel",
+              startLine: call.getStartLineNumber(),
+              endLine: call.getEndLineNumber(),
+              signature: `channel ${eventName}`,
+              exported: true,
+              visibility: "public"
+            }
+            channelSymbols.set(channelName, symbol)
+            symbols.push(symbol)
+          }
+
+          const enclosing = findEnclosingSymbol(call)
+          if (!enclosing) continue
+          const kind = publish ? "publishes" : "subscribes"
+          const key = `${enclosing}->${channelName}:${kind}`
+          if (channelEdges.has(key)) continue
+          channelEdges.add(key)
+          edges.push({
+            srcName: enclosing,
+            dstName: channelName,
+            kind,
+            srcLine: call.getStartLineNumber()
+          })
         }
 
         // 8. Call expressions (both `foo()` and `new Foo()`)

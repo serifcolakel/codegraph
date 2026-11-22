@@ -163,7 +163,8 @@ export const SearchGraphInput = Schema.Struct({
       "doc",
       "route",
       "decision",
-      "config"
+      "config",
+      "channel"
     )
   ),
   filePattern: Schema.optional(Schema.String),

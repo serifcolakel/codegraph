@@ -460,6 +460,54 @@ export const IndexStoreLive = Layer.effect(
           )
         )
 
+        const channelRows = yield* sql<{
+          id: string
+          name: string
+          filePath: string
+          startLine: number
+        }>`
+          SELECT s.id, s.name, f.path as filePath, s.start_line as startLine
+          FROM symbols s
+          JOIN files f ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId} AND s.kind = 'channel'
+          ORDER BY f.path ASC, s.start_line ASC, s.id ASC;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Failed to query channel symbols", cause: e })
+          )
+        )
+
+        const canonicalChannels = new Map<string, string>()
+        const duplicateChannels: string[] = []
+        for (const row of channelRows) {
+          const canonical = canonicalChannels.get(row.name)
+          if (canonical) duplicateChannels.push(row.id)
+          else canonicalChannels.set(row.name, row.id)
+        }
+
+        if (duplicateChannels.length > 0) {
+          yield* sql
+            .withTransaction(
+              Effect.gen(function* () {
+                for (const duplicate of duplicateChannels) {
+                  const row = channelRows.find((entry) => entry.id === duplicate)
+                  if (!row) continue
+                  const canonical = canonicalChannels.get(row.name)
+                  if (!canonical) continue
+                  yield* sql`UPDATE edges SET dst_symbol_id = ${canonical} WHERE dst_symbol_id = ${duplicate};`
+                  yield* sql`UPDATE edges SET src_symbol_id = ${canonical} WHERE src_symbol_id = ${duplicate};`
+                  yield* sql`DELETE FROM symbols_fts WHERE symbol_id = ${duplicate};`
+                  yield* sql`DELETE FROM symbols WHERE id = ${duplicate};`
+                }
+              })
+            )
+            .pipe(
+              Effect.mapError(
+                (e) => new StoreError({ message: "Failed to merge channel symbols", cause: e })
+              )
+            )
+        }
+
         const repoSymbols = yield* sql<{
           id: string
           name: string

@@ -12,7 +12,8 @@ export const SymbolKind = Schema.Literal(
   "doc",
   "route",
   "decision",
-  "config"
+  "config",
+  "channel"
 )
 export type SymbolKind = typeof SymbolKind.Type
 
@@ -41,7 +42,9 @@ export const EdgeKind = Schema.Literal(
   "usage",
   "throws",
   "raises",
-  "mentions"
+  "mentions",
+  "publishes",
+  "subscribes"
 )
 export type EdgeKind = typeof EdgeKind.Type
 
