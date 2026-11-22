@@ -61,6 +61,9 @@ npm run codegraph -- stats
 npm run codegraph -- coverage
 npm run codegraph -- coverage <repoId>
 
+# Map git changes to affected symbols and their blast radius
+npm run codegraph -- changes <repoId> --base main
+
 # Serve the HTTP API and graph UI (default port 4310)
 npm run codegraph -- serve --port 4310
 
@@ -110,9 +113,9 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 ## MCP server
 
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
-`search_graph`, `get_architecture`, `trace_path`, `list_projects`, `find_references`,
-`neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
-and `read_file_range`. Inputs are validated
+`search_graph`, `get_architecture`, `trace_path`, `detect_changes`, `list_projects`,
+`find_references`, `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`,
+`search_code`, and `read_file_range`. Inputs are validated
 with Effect `Schema`, and results are compact text with `file:line` references.
 
 ### 1. Index the repository

@@ -39,9 +39,10 @@ Implemented and verified:
   - Search with keyboard navigation, symbol panel with docs, callers and callees.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 14 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
-  `get_architecture`, `trace_path`, `list_projects`, `find_references`, `neighborhood`,
-  `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`, `read_file_range`.
+- MCP server with 15 tools: `repo_map`, `outline_file`, `search_symbol`, `search_graph`,
+  `get_architecture`, `trace_path`, `detect_changes`, `list_projects`, `find_references`,
+  `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
+  `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -94,7 +95,7 @@ Make the MCP server useful for real repository investigations.
 - [x] `get_code_snippet` by qualified name.
 - [x] `trace_path` with calls, references, data flow (call/usage/reference) and cross-file modes.
 - [x] `get_architecture` summary: languages, packages, entry points and hotspots; routes and clusters remain.
-- [ ] `detect_changes` from git diff to affected symbols and blast radius.
+- [x] `detect_changes` from git diff to affected symbols and blast radius.
 - [ ] `query_graph` exposing a safe read-only Cypher-like subset.
 - [x] `search_code` restricted to indexed files.
 - [ ] Keep outputs compact, paged and token-efficient; always include `file:line`.
