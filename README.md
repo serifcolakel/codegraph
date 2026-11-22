@@ -13,8 +13,9 @@ MCP server.
   C/C++, Ruby, PHP and Scala.
 - Symbol graph: files, symbols (functions, classes, interfaces, types, enums,
   methods, properties, consts) with language, qualified name and visibility,
-  plus import, call, reference, extends, implements, contains, throws and raises
-  edges.
+  plus import, call, call_reference, usage, reference, extends, implements,
+  contains, throws and raises edges. File-level imports are stored separately so
+  type-only imports stay visible.
 - Parse coverage and unresolved-edge diagnostics (`coverage` CLI command and
   the `index_status` MCP tool).
 - Documentation indexing: JSDoc, `///` / `/** */` block docs and Python
@@ -107,9 +108,9 @@ runs against the same `CODEGRAPH_DB_PATH` as the server.
 ## MCP server
 
 The MCP server exposes these tools: `repo_map`, `outline_file`, `search_symbol`,
-`find_references`, `neighborhood`, `index_status`, and `read_file_range`. Inputs
-are validated with Effect `Schema`, and results are compact text with `file:line`
-references.
+`find_references`, `neighborhood`, `index_status`, `get_graph_schema`,
+`get_code_snippet`, `search_code`, and `read_file_range`. Inputs are validated
+with Effect `Schema`, and results are compact text with `file:line` references.
 
 ### 1. Index the repository
 

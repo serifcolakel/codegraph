@@ -39,8 +39,9 @@ Implemented and verified:
   - Search with keyboard navigation, symbol panel with docs, callers and callees.
   - Depth control (1–8 hops, 500-node neighborhood limit), deep links (`#symbol=<id>`).
   - Index and re-index actions from the UI.
-- MCP server with 7 tools: `repo_map`, `outline_file`, `search_symbol`, `find_references`,
-  `neighborhood`, `index_status`, `read_file_range`.
+- MCP server with 10 tools: `repo_map`, `outline_file`, `search_symbol`, `find_references`,
+  `neighborhood`, `index_status`, `get_graph_schema`, `get_code_snippet`, `search_code`,
+  `read_file_range`.
 - CLI: `index [--watch] [--force]`, `serve`, `stats`, `mcp`.
 - Tests: parser, generic languages, incremental indexing, query layer, HTTP, MCP.
 
@@ -70,8 +71,8 @@ Replace heuristic-only parsing with real syntax trees for the primary languages.
 - [x] Keep a regex fallback for languages without an AST parser.
 - [x] Extract `throws` / `raises` from JSDoc tags, C# `<exception>` and language syntax.
 - [x] Add `language`, `qualifiedName`, `visibility` and `containerName` to symbol records.
-- [x] Emit `THROWS` and `RAISES` edges; `CALL_REFERENCE`, `USAGE`, file-level
-      `IMPORTS` and `DEFINES` edges remain.
+- [x] Emit `THROWS`, `RAISES`, `CALL_REFERENCE`, `USAGE` and file-level
+      `IMPORTS` edges. `DEFINES` is represented by `symbols.file_id`.
 - [x] Resolve package/module specifiers from `package.json`, `go.mod`,
       `Cargo.toml` and `pyproject.toml`; `pom.xml` and `build.gradle` remain.
 - [x] Add camelCase / snake_case tokenization to FTS so `useFundSizes` matches `fund` and `sizes`.
@@ -86,16 +87,16 @@ Make the MCP server useful for real repository investigations.
 
 - [ ] `index_repository` (index a path into the current database).
 - [ ] `list_projects` and `delete_project`.
-- [ ] `index_status` and coverage diagnostics.
+- [x] `index_status` and coverage diagnostics.
 - [ ] `search_graph` with name regex, kind filters, file scope, degree filters and paging.
-- [ ] `get_graph_schema` describing node labels, edge kinds and properties.
-- [ ] `get_file_outline`.
-- [ ] `get_code_snippet` by qualified name.
+- [x] `get_graph_schema` describing node labels, edge kinds and properties.
+- [x] `get_file_outline` (exposed as `outline_file`).
+- [x] `get_code_snippet` by qualified name.
 - [ ] `trace_path` with calls, references, data flow and cross-file modes.
 - [ ] `get_architecture` summary: languages, packages, entry points, routes, hotspots, clusters.
 - [ ] `detect_changes` from git diff to affected symbols and blast radius.
 - [ ] `query_graph` exposing a safe read-only Cypher-like subset.
-- [ ] `search_code` restricted to indexed files.
+- [x] `search_code` restricted to indexed files.
 - [ ] Keep outputs compact, paged and token-efficient; always include `file:line`.
 - [ ] Add async indexing with a job status endpoint for long repositories.
 
