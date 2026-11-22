@@ -9,7 +9,8 @@ export const SymbolKind = Schema.Literal(
   "method",
   "property",
   "enum",
-  "doc"
+  "doc",
+  "route"
 )
 export type SymbolKind = typeof SymbolKind.Type
 

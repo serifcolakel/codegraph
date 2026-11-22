@@ -62,6 +62,10 @@ type ComplexityFields = Pick<
   | "paramCount"
 >
 
+const ROUTE_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD", "ALL"])
+
+const EXPRESS_ROUTE_RECEIVERS = new Set(["app", "router", "server", "fastify", "api"])
+
 const SCAN_CALLS = new Set([
   "find",
   "findIndex",
@@ -556,6 +560,110 @@ export const ParserLive = Layer.succeed(Parser, {
                 : {})
             })
           }
+        }
+
+        // 6.5 Routes (file-based conventions and explicit declarations)
+        const routeNames = new Set<string>()
+        const addRoute = (
+          method: string,
+          routePath: string,
+          line: number,
+          endLine: number,
+          handler?: string,
+          doc?: string
+        ) => {
+          const name = `${method} ${routePath}`
+          if (routeNames.has(name)) return
+          routeNames.add(name)
+          symbols.push({
+            name,
+            kind: "route",
+            startLine: line,
+            endLine,
+            signature: name,
+            exported: true,
+            visibility: "public",
+            ...(doc ? { doc } : {})
+          })
+          if (handler) {
+            edges.push({
+              srcName: name,
+              dstName: handler,
+              kind: "contains",
+              srcLine: line
+            })
+          }
+        }
+
+        const normalizeRouteSegments = (segments: readonly string[]): string => {
+          const cleaned = segments
+            .filter((segment) => segment.length > 0 && !/^\(.*\)$/.test(segment))
+            .map((segment) => {
+              if (/^\[\.\.\..+\]$/.test(segment)) return `:${segment.slice(4, -1)}*`
+              if (/^\[.+\]$/.test(segment)) return `:${segment.slice(1, -1)}`
+              return segment
+            })
+          return cleaned.length === 0 ? "/" : `/${cleaned.join("/")}`
+        }
+
+        const appRouteMatch = filePath.match(/(?:^|\/)app\/(.+)?route\.[cm]?[jt]sx?$/)
+        if (appRouteMatch) {
+          const raw = appRouteMatch[1] ?? ""
+          const routePath = normalizeRouteSegments(raw.split("/"))
+          for (const fn of sourceFile.getFunctions()) {
+            const fnName = fn.getName()
+            if (!fnName || !fn.isExported()) continue
+            const method = fnName.toUpperCase()
+            if (!ROUTE_METHODS.has(method)) continue
+            addRoute(
+              method,
+              routePath,
+              fn.getStartLineNumber(),
+              fn.getEndLineNumber(),
+              fnName,
+              getDocText(fn)
+            )
+          }
+        }
+
+        const pagesApiMatch = filePath.match(/(?:^|\/)pages\/api\/(.+)\.[cm]?[jt]sx?$/)
+        if (pagesApiMatch) {
+          let raw = pagesApiMatch[1] ?? ""
+          if (raw === "index") raw = ""
+          raw = raw.replace(/\/index$/, "")
+          const routePath = `/api${raw ? `/${raw}` : ""}`
+          const normalized = normalizeRouteSegments(routePath.split("/"))
+          const handler = sourceFile.getDefaultExportSymbol()?.getName()
+          addRoute("ALL", normalized, 1, sourceFile.getEndLineNumber(), handler)
+        }
+
+        for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+          const callee = call.getExpression()
+          if (!Node.isPropertyAccessExpression(callee)) continue
+          const receiver = callee.getExpression().getText()
+          if (!EXPRESS_ROUTE_RECEIVERS.has(receiver)) continue
+          const method = callee.getName().toUpperCase()
+          if (!ROUTE_METHODS.has(method)) continue
+          const [pathArg, handlerArg] = call.getArguments()
+          if (!pathArg) continue
+          if (!Node.isStringLiteral(pathArg) && !Node.isNoSubstitutionTemplateLiteral(pathArg)) {
+            continue
+          }
+          const routePath = pathArg.getLiteralText()
+          const handler = handlerArg
+            ? handlerArg
+                .getText()
+                .replace(/\([\s\S]*$/, "")
+                .split(".")
+                .pop()
+            : undefined
+          addRoute(
+            method,
+            routePath.startsWith("/") ? routePath : `/${routePath}`,
+            call.getStartLineNumber(),
+            call.getEndLineNumber(),
+            handler
+          )
         }
 
         // 7. Imports

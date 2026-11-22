@@ -110,6 +110,30 @@ export const parsePythonFile: SourceParser["parse"] = (filePath, content) => {
   }
 
   const imports = collectImports(root)
+  const routeNames = new Set<string>()
+  const addRoute = (
+    method: string,
+    routePath: string,
+    line: number,
+    endLine: number,
+    handler?: string
+  ) => {
+    const name = `${method} ${routePath}`
+    if (routeNames.has(name)) return
+    routeNames.add(name)
+    symbols.push({
+      name,
+      kind: "route",
+      startLine: line,
+      endLine,
+      signature: name,
+      exported: true,
+      visibility: "public"
+    })
+    if (handler) {
+      addEdge({ srcName: name, dstName: handler, kind: "contains", srcLine: line })
+    }
+  }
   for (const [local, binding] of imports) {
     addEdge({
       srcName: local,
@@ -163,6 +187,28 @@ export const parsePythonFile: SourceParser["parse"] = (filePath, content) => {
     const body = declaration.childForFieldName("body")
     const qualified = containerName ? `${containerName}.${name}` : name
     const exported = !name.startsWith("_")
+
+    if (outer.type === "decorated_definition") {
+      for (const decorator of outer.namedChildren) {
+        if (decorator.type !== "decorator") continue
+        const match = decorator.text.match(
+          /@(?:[A-Za-z_]\w*)\.(get|post|put|patch|delete|options|head|route)\s*\(\s*["']([^"']+)["']/i
+        )
+        if (!match) continue
+        const method = (match[1] ?? "").toUpperCase()
+        const routePath = match[2] ?? "/"
+        const methods =
+          method === "ROUTE"
+            ? Array.from(
+                decorator.text.matchAll(/["'](get|post|put|patch|delete|options|head)["']/gi)
+              ).map((item) => (item[1] ?? "").toUpperCase())
+            : [method]
+        const effective = methods.length > 0 ? methods : ["ALL"]
+        for (const httpMethod of effective) {
+          addRoute(httpMethod, routePath, lineOf(decorator), endLineOf(decorator), qualified)
+        }
+      }
+    }
 
     const params = declaration.childForFieldName("parameters")?.namedChildren.length ?? 0
     symbols.push({
