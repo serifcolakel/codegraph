@@ -73,6 +73,11 @@ export type CodeSnippetInput = typeof CodeSnippetInput.Type
 export const ListProjectsInput = Schema.Struct({})
 export type ListProjectsInput = typeof ListProjectsInput.Type
 
+export const ArchitectureInput = Schema.Struct({
+  repoId: Schema.optional(Schema.String)
+})
+export type ArchitectureInput = typeof ArchitectureInput.Type
+
 export const SearchGraphInput = Schema.Struct({
   namePattern: Schema.optional(Schema.String),
   regex: Schema.optional(Schema.Boolean),
@@ -148,6 +153,17 @@ export const createMcpServer = <R>(
               repoId: { type: "string", description: "Optional repo ID" }
             },
             required: ["path"]
+          }
+        },
+        {
+          name: "get_architecture",
+          description:
+            "Summarizes languages, packages, entry points and hotspot symbols for a repository.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              repoId: { type: "string", description: "Optional repo ID" }
+            }
           }
         },
         {
@@ -357,6 +373,43 @@ export const createMcpServer = <R>(
               }
             ]
           }
+        }
+
+        case "get_architecture": {
+          const args = Schema.decodeUnknownSync(ArchitectureInput)(rawArgs ?? {})
+          const text = await runtime.runPromise(
+            Effect.gen(function* () {
+              const query = yield* GraphQuery
+              const repoId = yield* getTargetRepoId(args.repoId)
+              const summary = yield* query.architecture(repoId)
+              const languages = Object.entries(summary.languages)
+                .map(([language, count]) => `${language}=${count}`)
+                .join(", ")
+              const packages = summary.packages
+                .map((pkg) => `  ${pkg.name}: files=${pkg.files} symbols=${pkg.symbols}`)
+                .join("\n")
+              const entryPoints = summary.entryPoints
+                .map(
+                  (symbol) =>
+                    `  ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine}`
+                )
+                .join("\n")
+              const hotspots = summary.hotspots
+                .map(
+                  (symbol) =>
+                    `  ${symbol.name} (${symbol.kind}) ${symbol.filePath}:${symbol.startLine} in=${symbol.inDegree}`
+                )
+                .join("\n")
+              return [
+                `Repository: ${summary.repoId} files=${summary.files} symbols=${summary.symbols} edges=${summary.edges}`,
+                `languages: ${languages || "none"}`,
+                `packages:\n${packages || "  none"}`,
+                `entry points:\n${entryPoints || "  none"}`,
+                `hotspots:\n${hotspots || "  none"}`
+              ].join("\n")
+            })
+          )
+          return { content: [{ type: "text", text }] }
         }
 
         case "list_projects": {

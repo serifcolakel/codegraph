@@ -32,6 +32,32 @@ export interface SearchGraphResult {
   readonly truncated: boolean
 }
 
+export interface ArchitectureSymbol {
+  readonly id: string
+  readonly name: string
+  readonly kind: SymbolKind
+  readonly filePath: string
+  readonly startLine: number
+  readonly inDegree: number
+}
+
+export interface ArchitecturePackage {
+  readonly name: string
+  readonly files: number
+  readonly symbols: number
+}
+
+export interface ArchitectureSummary {
+  readonly repoId: string
+  readonly files: number
+  readonly symbols: number
+  readonly edges: number
+  readonly languages: Readonly<Record<string, number>>
+  readonly packages: readonly ArchitecturePackage[]
+  readonly entryPoints: readonly ArchitectureSymbol[]
+  readonly hotspots: readonly ArchitectureSymbol[]
+}
+
 export interface GraphQuery {
   readonly searchSymbols: (
     query: string,
@@ -49,6 +75,8 @@ export interface GraphQuery {
   readonly searchGraph: (
     options: SearchGraphOptions
   ) => Effect.Effect<SearchGraphResult, StoreError>
+
+  readonly architecture: (repoId: string) => Effect.Effect<ArchitectureSummary, StoreError>
 
   readonly findReferences: (
     symbolId: string
@@ -357,6 +385,116 @@ export const GraphQueryLive = Layer.effect(
           total,
           hasMore: offset + page.length < total,
           truncated: rows.length === MAX_SEARCH_GRAPH_CANDIDATES
+        }
+      })
+
+    const architecture = (repoId: string): Effect.Effect<ArchitectureSummary, StoreError> =>
+      Effect.gen(function* () {
+        const languageRows = yield* sql<{ language: string; count: number }>`
+          SELECT CASE WHEN language = '' THEN 'unknown' ELSE language END as language,
+                 COUNT(*) as count
+          FROM files WHERE repo_id = ${repoId}
+          GROUP BY language ORDER BY count DESC;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Architecture languages query failed", cause: e })
+          )
+        )
+
+        const packageRows = yield* sql<{
+          name: string
+          files: number
+          symbols: number
+        }>`
+          SELECT CASE WHEN instr(f.path, '/') = 0 THEN '.'
+                      ELSE substr(f.path, 1, instr(f.path, '/') - 1) END as name,
+                 COUNT(DISTINCT f.id) as files,
+                 COUNT(s.id) as symbols
+          FROM files f
+          LEFT JOIN symbols s ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId}
+          GROUP BY name
+          ORDER BY symbols DESC, name ASC
+          LIMIT 20;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Architecture packages query failed", cause: e })
+          )
+        )
+
+        const symbolRows = yield* sql<{
+          id: string
+          name: string
+          kind: SymbolKind
+          filePath: string
+          startLine: number
+          inDegree: number
+        }>`
+          SELECT s.id, s.name, s.kind, f.path as filePath, s.start_line as startLine,
+                 (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+          FROM symbols s
+          JOIN files f ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId}
+          ORDER BY inDegree DESC, s.name ASC
+          LIMIT 15;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Architecture hotspots query failed", cause: e })
+          )
+        )
+
+        const entryRows = yield* sql<{
+          id: string
+          name: string
+          kind: SymbolKind
+          filePath: string
+          startLine: number
+          inDegree: number
+        }>`
+          SELECT s.id, s.name, s.kind, f.path as filePath, s.start_line as startLine,
+                 (SELECT COUNT(*) FROM edges e WHERE e.dst_symbol_id = s.id) as inDegree
+          FROM symbols s
+          JOIN files f ON s.file_id = f.id
+          WHERE f.repo_id = ${repoId}
+            AND s.exported = 1
+            AND s.kind IN ('function', 'method')
+            AND NOT EXISTS (
+              SELECT 1 FROM edges e
+              WHERE e.dst_symbol_id = s.id AND e.kind IN ('call', 'call_reference')
+            )
+          ORDER BY s.name ASC
+          LIMIT 15;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Architecture entry points query failed", cause: e })
+          )
+        )
+
+        const totals = yield* sql<{ files: number; symbols: number; edges: number }>`
+          SELECT
+            (SELECT COUNT(*) FROM files WHERE repo_id = ${repoId}) as files,
+            (SELECT COUNT(*) FROM symbols s JOIN files f ON s.file_id = f.id
+              WHERE f.repo_id = ${repoId}) as symbols,
+            (SELECT COUNT(*) FROM edges e JOIN symbols s ON e.src_symbol_id = s.id
+              JOIN files f ON s.file_id = f.id WHERE f.repo_id = ${repoId}) as edges;
+        `.pipe(
+          Effect.mapError(
+            (e) => new StoreError({ message: "Architecture totals query failed", cause: e })
+          )
+        )
+
+        const languages: Record<string, number> = {}
+        for (const row of languageRows) languages[row.language] = row.count
+
+        return {
+          repoId,
+          files: totals[0]?.files ?? 0,
+          symbols: totals[0]?.symbols ?? 0,
+          edges: totals[0]?.edges ?? 0,
+          languages,
+          packages: packageRows,
+          entryPoints: entryRows,
+          hotspots: symbolRows
         }
       })
 
@@ -995,6 +1133,7 @@ export const GraphQueryLive = Layer.effect(
       getSymbol,
       getSymbolByQualifiedName,
       searchGraph,
+      architecture,
       findReferences,
       outlineFile,
       neighborhood,
